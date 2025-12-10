@@ -67,10 +67,10 @@ export class ResponseSaver {
                 fs.writeFileSync(filepath, audioData);
             }
 
-            console.log(`Audio saved: ${filepath}`);
+            console.log(`✅ Audio saved: ${filepath}`);
             return filepath;
         } catch (error) {
-            console.error(`Failed to save audio: ${error}`);
+            console.error(`❌ Failed to save audio: ${error}`);
             throw error;
         }
     }
@@ -86,10 +86,10 @@ export class ResponseSaver {
 
         try {
             fs.writeFileSync(filepath, text, 'utf-8');
-            console.log(`Text saved: ${filepath}`);
+            console.log(`✅ Text saved: ${filepath}`);
             return filepath;
         } catch (error) {
-            console.error(`Failed to save text: ${error}`);
+            console.error(`❌ Failed to save text: ${error}`);
             throw error;
         }
     }
@@ -154,9 +154,9 @@ export class ResponseSaver {
                 'utf-8'
             );
 
-            console.log(`Metadata saved: ${metadataPath}`);
+            console.log(`✅ Metadata saved: ${metadataPath}`);
         } catch (error) {
-            console.error(`Failed to save metadata: ${error}`);
+            console.error(`❌ Failed to save metadata: ${error}`);
         }
     }
 
@@ -177,9 +177,9 @@ export class ResponseSaver {
                 'utf-8'
             );
 
-            console.log(`Session summary saved: ${summaryPath}`);
+            console.log(`✅ Session summary saved: ${summaryPath}`);
         } catch (error) {
-            console.error(`Failed to save summary: ${error}`);
+            console.error(`❌ Failed to save summary: ${error}`);
         }
     }
 
@@ -220,9 +220,9 @@ responses/
 
             const indexPath = path.join(sessionDir, 'index.md');
             fs.writeFileSync(indexPath, indexContent, 'utf-8');
-            console.log(`Index created: ${indexPath}`);
+            console.log(`✅ Index created: ${indexPath}`);
         } catch (error) {
-            console.error(`Failed to create index: ${error}`);
+            console.error(`❌ Failed to create index: ${error}`);
         }
     }
 
@@ -253,7 +253,7 @@ responses/
                 return fs.statSync(fullPath).isDirectory();
             });
         } catch (error) {
-            console.error(` Failed to list sessions: ${error}`);
+            console.error(`❌ Failed to list sessions: ${error}`);
             return [];
         }
     }

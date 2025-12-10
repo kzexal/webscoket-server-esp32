@@ -87,12 +87,12 @@ export async function textToSpeech(
                 } else {
                     // Fallback: kiểm tra stdout để tìm file path
                     const output = stdout.trim();
-                    if (output.includes('Audio saved:')) {
-                        const match = output.match(/Audio saved:\s*(.+)/);
-                        if (match && fs.existsSync(match[1])) {
-                            resolve(match[1]);
+                    if (output.startsWith('SUCCESS:')) {
+                        const filePath = output.substring(8).trim();
+                        if (fs.existsSync(filePath)) {
+                            resolve(filePath);
                         } else {
-                            reject(new Error(`Audio file not found. Output: ${output}`));
+                            reject(new Error(`Audio file not found: ${filePath}`));
                         }
                     } else {
                         reject(new Error(`Audio file not created. Output: ${output}`));

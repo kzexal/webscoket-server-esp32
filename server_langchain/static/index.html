@@ -14,13 +14,7 @@
             margin: 0;
             background-color: #f0f0f0;
         }
-        .container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            align-items: center;
-        }
-        #toggleAudio, #uploadButton {
+        #toggleAudio {
             font-size: 18px;
             padding: 10px 20px;
             cursor: pointer;
@@ -30,49 +24,13 @@
             border-radius: 5px;
             transition: background-color 0.3s;
         }
-        #toggleAudio:hover, #uploadButton:hover {
+        #toggleAudio:hover {
             background-color: #45a049;
-        }
-        #fileInput {
-            display: none;
-        }
-        #uploadButton {
-            background-color: #2196F3;
-        }
-        #uploadButton:hover {
-            background-color: #0b7dda;
-        }
-        #status {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 5px;
-            min-height: 20px;
-            max-width: 500px;
-            text-align: center;
-        }
-        .status-success {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .status-error {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .status-info {
-            background-color: #d1ecf1;
-            color: #0c5460;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <button id="toggleAudio">Start Audio</button>
-        <div>
-            <input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.aac">
-            <button id="uploadButton">📁 Chọn File Audio</button>
-        </div>
-        <div id="status"></div>
-    </div>
+    <button id="toggleAudio">Start Audio</button>
 
     <script>
         // Create audio context
@@ -225,76 +183,6 @@
                 // audioContext.suspend();
                 toggleButton.textContent = 'Start Audio';
                 isAudioOn = false;
-            }
-        });
-
-        // File upload functionality
-        const fileInput = document.getElementById('fileInput');
-        const uploadButton = document.getElementById('uploadButton');
-        const statusDiv = document.getElementById('status');
-
-        function showStatus(message, type = 'info') {
-            statusDiv.textContent = message;
-            statusDiv.className = `status-${type}`;
-            setTimeout(() => {
-                statusDiv.textContent = '';
-                statusDiv.className = '';
-            }, 5000);
-        }
-
-        uploadButton.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            // Validate file type
-            const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/aac', 'audio/x-aac'];
-            const validExtensions = ['.mp3', '.wav', '.aac'];
-            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
-            
-            if (!validTypes.includes(file.type) && !validExtensions.includes(fileExt)) {
-                showStatus('⚠️ Định dạng file không hỗ trợ. Vui lòng chọn file MP3, WAV hoặc AAC.', 'error');
-                return;
-            }
-
-            // Validate file size (25MB max)
-            if (file.size > 25 * 1024 * 1024) {
-                showStatus('⚠️ File quá lớn. Kích thước tối đa là 25MB.', 'error');
-                return;
-            }
-
-            showStatus('📤 Đang xử lý file audio...', 'info');
-            uploadButton.disabled = true;
-            uploadButton.textContent = '⏳ Đang xử lý...';
-
-            try {
-                const formData = new FormData();
-                formData.append('audio', file);
-                formData.append('instructions', 'Please carefully listen to the audio content, understand what the user is saying, and respond in English based on the specific content in the audio. Do not just give generic greetings, but answer the specific questions or topics mentioned in the audio. Always respond in English, not Chinese.');
-
-                const response = await fetch('/api/upload-audio', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showStatus(`✅ Thành công! AI đã phản hồi. Session ID: ${result.sessionId}`, 'success');
-                    console.log('Response:', result);
-                } else {
-                    showStatus(`❌ Lỗi: ${result.error || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                console.error('Upload error:', error);
-                showStatus(`❌ Lỗi khi upload: ${error.message}`, 'error');
-            } finally {
-                uploadButton.disabled = false;
-                uploadButton.textContent = '📁 Chọn File Audio';
-                fileInput.value = ''; // Reset file input
             }
         });
 

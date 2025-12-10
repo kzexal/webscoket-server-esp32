@@ -101,7 +101,7 @@ export class AudioManager {
         const filename = path.join(tmpDir, `recording-${randomId}`);
         this.recordingFilePath = filename;
         
-        console.log(`Started new recording session: ${filename}`);
+        console.log(`🎙️  Started new recording session: ${filename}`);
         // Don't initialize file writer yet - wait to detect format
     }
 
@@ -149,21 +149,21 @@ export class AudioManager {
             // Detect format on first buffer if not detected yet
             if (this.detectedFormat === null && buffer.length > 0) {
                 this.detectedFormat = this.detectFormat(buffer);
-                console.log(`Detected audio format: ${this.detectedFormat}`);
+                console.log(`🎵 Detected audio format: ${this.detectedFormat}`);
                 
                 // Initialize file writer only for PCM/WAV format
                 if (this.detectedFormat === AudioFormat.PCM || this.detectedFormat === AudioFormat.WAV) {
                     if (this.recordingFilePath) {
                         const filename = `${this.recordingFilePath}.wav`;
                         this.initializeFileWriter(filename);
-                        console.log(`Initialized WAV file writer: ${filename}`);
+                        console.log(`📝 Initialized WAV file writer: ${filename}`);
                     }
                 } else if (this.detectedFormat === AudioFormat.MP3 || this.detectedFormat === AudioFormat.AAC) {
                     // For MP3/AAC, we'll save directly to file, no WAV writer needed
                     if (this.recordingFilePath) {
                         const ext = this.detectedFormat === AudioFormat.MP3 ? 'mp3' : 'aac';
                         this.recordingFilePath = `${this.recordingFilePath}.${ext}`;
-                        console.log(`Will save compressed audio to: ${this.recordingFilePath}`);
+                        console.log(`📝 Will save compressed audio to: ${this.recordingFilePath}`);
                     }
                 }
             }
@@ -254,13 +254,13 @@ export class AudioManager {
                     // Save compressed audio to file
                     if (this.recordingFilePath) {
                         fs.writeFileSync(this.recordingFilePath, this.audioBuffer);
-                        console.log(`Saved ${this.detectedFormat.toUpperCase()} file: ${this.recordingFilePath} (${(this.audioBuffer.length / 1024).toFixed(2)} KB)`);
+                        console.log(`✅ Saved ${this.detectedFormat.toUpperCase()} file: ${this.recordingFilePath} (${(this.audioBuffer.length / 1024).toFixed(2)} KB)`);
                     } else {
-                        console.warn('No recording file path set, cannot save MP3 file');
+                        console.warn('⚠️  No recording file path set, cannot save MP3 file');
                     }
                     return this.audioBuffer;
                 }
-                console.warn('Audio buffer is empty!');
+                console.warn('⚠️  Audio buffer is empty!');
                 return Buffer.alloc(0);
             }
 
@@ -272,7 +272,7 @@ export class AudioManager {
 
             const audioFilePath = this.fileWriter.path;
             const fileBuffer = fs.readFileSync(audioFilePath);
-            console.log(`Successfully read audio file: ${audioFilePath}`);
+            console.log(`✅ Successfully read audio file: ${audioFilePath}`);
             return fileBuffer;
         } catch (error) {
             console.error('Error reading current audio buffer:', error);
@@ -354,7 +354,7 @@ export class AudioManager {
     }
 
     public closeFile(): void {
-        console.log('Closing file writer');
+        console.log('📝 Closing file writer');
         if (this.writeTimeout) {
             clearTimeout(this.writeTimeout);
             this.writeTimeout = null;
@@ -362,19 +362,19 @@ export class AudioManager {
         
         // For compressed formats, no file writer to close
         if (this.detectedFormat === AudioFormat.MP3 || this.detectedFormat === AudioFormat.AAC) {
-            console.log(`MP3/AAC format - no file writer to close, buffer will be saved in getCurrentBuffer()`);
+            console.log(`📝 MP3/AAC format - no file writer to close, buffer will be saved in getCurrentBuffer()`);
             return;
         }
         
         // Process any remaining audio data for PCM/WAV
         if (this.audioBuffer.length > 0) {
-            console.log(`Processing remaining ${this.audioBuffer.length} bytes before closing`);
+            console.log(`📝 Processing remaining ${this.audioBuffer.length} bytes before closing`);
             this.processAndWriteBuffer();
         }
         // Close file writer
         if (this.fileWriter) {
             this.fileWriter.end();
-            console.log('WAV file writer closed');
+            console.log('✅ WAV file writer closed');
             // Don't clear fileWriter yet - need it for getCurrentBuffer()
         }
     }

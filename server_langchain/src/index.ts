@@ -11,27 +11,6 @@ import { ZhipuVoiceAgent } from "./lib/zhipu_agent";
 import { ZhipuAiClient } from "./lib/zhipu_client";
 import { ResponseSaver } from "./lib/response_saver";
 import { textToSpeech, readAudioFile } from "./lib/tts_local";
-// import { audioToText } from "./lib/deepgram_stt"; // DEEPGRAM STT ĐÃ TẮT - Xem DEEPGRAM_ENABLE_GUIDE.md
-
-// Helper function để tạo language instructions
-function getLanguageInstructions(languageCode: string): string {
-    const languageMap: { [key: string]: string } = {
-        'vi': 'IMPORTANT: Respond in Vietnamese (Tiếng Việt). Use Vietnamese language for your response.',
-        'en': 'IMPORTANT: Respond in English. Use English language for your response.',
-        'zh': 'IMPORTANT: Respond in Chinese (中文). Use Chinese language for your response.',
-        'ja': 'IMPORTANT: Respond in Japanese (日本語). Use Japanese language for your response.',
-        'ko': 'IMPORTANT: Respond in Korean (한국어). Use Korean language for your response.',
-        'fr': 'IMPORTANT: Respond in French (Français). Use French language for your response.',
-        'de': 'IMPORTANT: Respond in German (Deutsch). Use German language for your response.',
-        'es': 'IMPORTANT: Respond in Spanish (Español). Use Spanish language for your response.',
-        'pt': 'IMPORTANT: Respond in Portuguese (Português). Use Portuguese language for your response.',
-        'ru': 'IMPORTANT: Respond in Russian (Русский). Use Russian language for your response.',
-        'th': 'IMPORTANT: Respond in Thai (ไทย). Use Thai language for your response.',
-    };
-
-    const langKey = languageCode.toLowerCase().split('-')[0];
-    return languageMap[langKey] || `IMPORTANT: Respond in the same language as the user's input. The detected language code is: ${languageCode}`;
-}
 
 const app = new Hono();
 const WS_PORT = 8888;
@@ -206,164 +185,6 @@ app.get("/api/responses/metadata/:sessionId/:filename", (c) => {
   }
 });
 
-// API endpoint to upload and process audio file
-app.post("/api/upload-audio", async (c) => {
-  try {
-    if (!process.env.ZHIPU_API_KEY) {
-      return c.json({ error: 'ZHIPU_API_KEY is not set' }, 500);
-    }
-
-    const body = await c.req.parseBody();
-    const file = body.audio as File;
-    const instructions = (body.instructions as string) || "Please carefully listen to the audio content, understand what the user is saying, and respond in English based on the specific content in the audio. Do not just give generic greetings, but answer the specific questions or topics mentioned in the audio. Always respond in English, not Chinese.";
-
-    if (!file) {
-      return c.json({ error: 'No audio file provided' }, 400);
-    }
-
-    // Validate file type
-    const fileName = file.name || 'audio';
-    const fileExt = path.extname(fileName).toLowerCase().slice(1);
-    const audioFormat = (fileExt === 'mp3' ? 'mp3' : fileExt === 'wav' ? 'wav' : fileExt === 'aac' ? 'aac' : 'mp3') as 'mp3' | 'wav' | 'aac';
-    
-    if (!['mp3', 'wav', 'aac'].includes(fileExt)) {
-      return c.json({ error: 'Unsupported audio format. Please use MP3, WAV, or AAC.' }, 400);
-    }
-
-    // Read file buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = Buffer.from(arrayBuffer);
-
-    console.log(`Processing uploaded audio file: ${fileName}`);
-    console.log(`Audio format: ${audioFormat}, size: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
-
-    // Validate file size (max 25MB)
-    if (audioBuffer.length > 25 * 1024 * 1024) {
-      return c.json({ error: 'File too large. Maximum size is 25MB. Please use MP3 format to compress.' }, 400);
-    }
-
-    // Initialize Zhipu client and response saver
-    const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
-    const responseSaver = new ResponseSaver();
-
-    // ============================================
-    // DEEPGRAM STT ĐÃ TẮT - GỬI THẲNG AUDIO CHO AI
-    // Để bật lại Deepgram STT, xem file: DEEPGRAM_ENABLE_GUIDE.md
-    // ============================================
-    
-    // Gửi thẳng audio buffer cho Zhipu GLM-4-Voice (không cần transcript)
-    console.log(" Sending audio directly to Zhipu GLM-4-Voice...");
-    console.log(` Audio size: ${(audioBuffer.length / 1024).toFixed(2)} KB, format: ${audioFormat}`);
-    
-    const response = await client.chat({
-      audioData: audioBuffer,
-      audioFormat: audioFormat,
-      text: instructions  // Instructions để hướng dẫn AI
-    });
-
-    // Extract text response
-    const responseText = client.getTextFromResponse(response);
-
-    // Save text response to file
-    const textPath = responseSaver.saveTextResponse(responseText);
-
-    // Chuyển text thành audio sử dụng pyttsx3 (offline TTS)
-    console.log(" Converting text to speech using pyttsx3 (offline TTS)...");
-    let audioPath: string | undefined;
-    
-    try {
-      // Tạo audio từ text sử dụng pyttsx3
-      const ttsAudioFile = await textToSpeech(responseText, {
-        outputDir: path.join(process.cwd(), 'tmp')
-      });
-      
-      // Đọc file audio đã tạo
-      const audioBuffer = readAudioFile(ttsAudioFile);
-      console.log(` Audio generated: ${ttsAudioFile} (${(audioBuffer.length / 1024).toFixed(2)} KB)`);
-      
-      // Sau khi chuyển thành audio, hiển thị text trên terminal (đồng bộ)
-      console.log('\n' + ''.repeat(60));
-      console.log(' AI Response Text:');
-      console.log(''.repeat(60));
-      console.log(responseText);
-      console.log(''.repeat(60));
-      console.log(''.repeat(60) + '\n');
-      
-      // Lưu audio response (pyttsx3 xuất ra .wav)
-      audioPath = responseSaver.saveAudioResponse(
-        audioBuffer,
-        'wav'
-      );
-      console.log(` Audio saved: ${audioPath}`);
-      
-      // Lưu complete response với metadata (pyttsx3 xuất ra .wav)
-      responseSaver.saveCompleteResponse(
-        responseText,
-        audioBuffer,
-        'wav'
-      );
-      
-    } catch (ttsError: any) {
-      console.error(' Error converting text to speech:', ttsError.message);
-      
-      // Nếu pyttsx3 thất bại, thử dùng audio từ Zhipu (nếu có)
-      const audioResponse = client.getAudioFromResponse(response);
-      if (audioResponse) {
-        console.log("  Falling back to Zhipu audio response...");
-        
-        // Save audio response to file
-        audioPath = responseSaver.saveAudioResponse(
-          audioResponse.data,
-        'mp3'
-      );
-      
-      console.log(`Audio response saved to: ${audioPath}`);
-
-      // Also save complete response with metadata
-      responseSaver.saveCompleteResponse(
-        responseText,
-        audioResponse.data,
-        'mp3'
-      );
-      } else {
-        // Không có audio từ cả pyttsx3 và Zhipu
-        console.log("  No audio available");
-        
-        // Hiển thị text trên terminal
-        console.log('\n' + ''.repeat(60));
-        console.log(' AI Response Text:');
-        console.log(''.repeat(60));
-        console.log(responseText);
-        console.log(''.repeat(60));
-        console.log(''.repeat(60) + '\n');
-      }
-    }
-
-    return c.json({
-      success: true,
-      text: responseText,
-      textPath: textPath,
-      audioPath: audioPath,
-      sessionId: responseSaver.getSessionId(),
-      message: 'Audio file processed successfully'
-    });
-
-  } catch (error: any) {
-    console.error('Error processing uploaded audio:', error);
-    
-    let errorMessage = 'Failed to process audio file';
-    if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Request timeout: Audio file too large. Use MP3 format.';
-    } else if (error.response?.status === 413) {
-      errorMessage = 'Audio payload too large. Use MP3 format to compress.';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    return c.json({ error: errorMessage }, 500);
-  }
-});
-
 // API endpoint to process MP3 file from recordings folder
 app.post("/api/process-file", async (c) => {
   try {
@@ -373,7 +194,7 @@ app.post("/api/process-file", async (c) => {
 
     const body = await c.req.json();
     const filename = body.filename || 'test.mp3';
-    const instructions = body.instructions || "Please carefully listen to the audio content, understand what the user is saying, and respond in English based on the specific content in the audio. Do not just give generic greetings, but answer the specific questions or topics mentioned in the audio. Always respond in English, not Chinese.";
+    const instructions = body.instructions || "You must respond ONLY in English. If the user speaks Chinese (or any non‑English), translate it to English and respond in fluent English. Never include Chinese characters in the output. Focus on the specific audio content; do not give generic greetings.";
 
     // Read MP3 file from recordings folder
     const recordingsDir = path.join(process.cwd(), "recordings");
@@ -396,42 +217,12 @@ app.post("/api/process-file", async (c) => {
     const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
     const responseSaver = new ResponseSaver();
 
-    // ============================================
-    // DEEPGRAM STT ĐÃ TẮT TẠM THỜI
-    // Để bật lại, xem file: DEEPGRAM_ENABLE_GUIDE.md
-    // ============================================
-    
-    // Chuyển audio thành text sử dụng Deepgram STT
-    // console.log("🎙️  Converting audio to text using Deepgram STT...");
-    // let sttResult: { transcript: string; language: string };
-    // 
-    // try {
-    //   sttResult = await audioToText(audioBuffer, audioFormat);
-    //   console.log(` User said: ${sttResult.transcript}`);
-    //   console.log(`🌐 Detected language: ${sttResult.language}`);
-    // } catch (sttError: any) {
-    //   console.error(' Error converting audio to text:', sttError.message);
-    //   return c.json({ 
-    //     error: `STT failed: ${sttError.message}` 
-    //   }, 500);
-    // }
-    // 
-    // const userText = sttResult.transcript;
-    // const detectedLanguage = sttResult.language;
-    
-    // ============================================
-    // DEEPGRAM STT ĐÃ TẮT - GỬI THẲNG AUDIO CHO AI
-    // Để bật lại Deepgram STT, xem file: DEEPGRAM_ENABLE_GUIDE.md
-    // ============================================
-    
-    // Gửi thẳng audio buffer cho Zhipu GLM-4-Voice (không cần transcript)
-    console.log(" Sending audio directly to Zhipu GLM-4-Voice...");
-    console.log(` Audio size: ${(audioBuffer.length / 1024).toFixed(2)} KB, format: ${audioFormat}`);
-    
+    // Send to Zhipu API
+    console.log("Sending audio to Zhipu GLM-4-Voice...");
     const response = await client.chat({
       audioData: audioBuffer,
       audioFormat: audioFormat,
-      text: instructions  // Instructions để hướng dẫn AI
+      text: instructions
     });
 
     // Extract text response
@@ -440,8 +231,8 @@ app.post("/api/process-file", async (c) => {
     // Save text response to file
     const textPath = responseSaver.saveTextResponse(responseText);
 
-    // Chuyển text thành audio sử dụng pyttsx3 (offline TTS)
-    console.log(" Converting text to speech using pyttsx3 (offline TTS)...");
+    // Chuyển text thành audio sử dụng pyttsx3 (local TTS)
+    console.log("🎤 Converting text to speech using pyttsx3...");
     let audioPath: string | undefined;
     
     try {
@@ -452,24 +243,24 @@ app.post("/api/process-file", async (c) => {
       
       // Đọc file audio đã tạo
       const audioBuffer = readAudioFile(ttsAudioFile);
-      console.log(` Audio generated: ${ttsAudioFile} (${(audioBuffer.length / 1024).toFixed(2)} KB)`);
+      console.log(`✅ Audio generated: ${ttsAudioFile} (${(audioBuffer.length / 1024).toFixed(2)} KB)`);
       
       // Sau khi chuyển thành audio, hiển thị text trên terminal (đồng bộ)
-      console.log('\n' + ''.repeat(60));
-      console.log(' AI Response Text:');
-      console.log(''.repeat(60));
+      console.log('\n' + '═'.repeat(60));
+      console.log('💬 AI Response Text:');
+      console.log('─'.repeat(60));
       console.log(responseText);
-      console.log(''.repeat(60));
-      console.log(''.repeat(60) + '\n');
+      console.log('─'.repeat(60));
+      console.log('═'.repeat(60) + '\n');
       
-      // Lưu audio response (pyttsx3 xuất ra .wav)
+      // Lưu audio response
       audioPath = responseSaver.saveAudioResponse(
         audioBuffer,
         'wav'
       );
-      console.log(` Audio saved: ${audioPath}`);
+      console.log(`💾 Audio saved: ${audioPath}`);
       
-      // Lưu complete response với metadata (pyttsx3 xuất ra .wav)
+      // Lưu complete response với metadata
       responseSaver.saveCompleteResponse(
         responseText,
         audioBuffer,
@@ -477,38 +268,38 @@ app.post("/api/process-file", async (c) => {
       );
       
     } catch (ttsError: any) {
-      console.error(' Error converting text to speech:', ttsError.message);
+      console.error('❌ Error converting text to speech:', ttsError.message);
       
       // Nếu pyttsx3 thất bại, thử dùng audio từ Zhipu (nếu có)
       const audioResponse = client.getAudioFromResponse(response);
       if (audioResponse) {
-        console.log("  Falling back to Zhipu audio response...");
+        console.log("⚠️  Falling back to Zhipu audio response...");
         
         // Save audio response to file
         audioPath = responseSaver.saveAudioResponse(
           audioResponse.data,
-        'mp3'
-      );
-      
-      console.log(`Audio response saved to: ${audioPath}`);
+          'mp3'
+        );
+        
+        console.log(`Audio response saved to: ${audioPath}`);
 
-      // Also save complete response with metadata
-      responseSaver.saveCompleteResponse(
-        responseText,
-        audioResponse.data,
-        'mp3'
-      );
+        // Also save complete response with metadata
+        responseSaver.saveCompleteResponse(
+          responseText,
+          audioResponse.data,
+          'mp3'
+        );
       } else {
         // Không có audio từ cả pyttsx3 và Zhipu
-        console.log("  No audio available");
+        console.log("⚠️  No audio available");
         
         // Hiển thị text trên terminal
-        console.log('\n' + ''.repeat(60));
-        console.log(' AI Response Text:');
-        console.log(''.repeat(60));
+        console.log('\n' + '═'.repeat(60));
+        console.log('💬 AI Response Text:');
+        console.log('─'.repeat(60));
         console.log(responseText);
-        console.log(''.repeat(60));
-        console.log(''.repeat(60) + '\n');
+        console.log('─'.repeat(60));
+        console.log('═'.repeat(60) + '\n');
       }
     }
 
