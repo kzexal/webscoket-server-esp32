@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zhipu Voice Assistant - WebSocket Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #44ff44;
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .status-text {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #connectBtn {
+            background: #667eea;
+            color: white;
+        }
+
+        #connectBtn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        #startBtn, #stopBtn {
+            background: #764ba2;
+            color: white;
+        }
+
+        #startBtn:hover, #stopBtn:hover {
+            background: #6a4292;
+            transform: translateY(-2px);
+        }
+
+        #startBtn:disabled, #stopBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message-container {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .message.info {
+            background: #e3f2fd;
+            color: #1565c0;
+            border-left: 4px solid #1976d2;
+        }
+
+        .message.response {
+            background: #f3e5f5;
+            color: #6a1b9a;
+            border-left: 4px solid #7b1fa2;
+        }
+
+        .message.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #d32f2f;
+        }
+
+        .message.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #388e3c;
+        }
+
+        .timestamp {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .clear-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px;
+            background: #f0f0f0;
+            color: #666;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .clear-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .info-box {
+            background: #fff9e6;
+            border: 1px solid #ffe082;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #ff6f00;
+        }
+
+        .recording-indicator {
+            display: none;
+            color: #d32f2f;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+            background: #ffebee;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .recording-indicator.active {
+            display: block;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Zhipu Voice Assistant</h1>
+        <p class="subtitle">WebSocket 客户端测试工具</p>
+
+        <div class="info-box">
+            <strong>⚙️ 说明:</strong> 这个客户端用于测试与 Zhipu Voice Assistant 服务器的 WebSocket 连接。
+        </div>
+
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <div class="status-text">
+                状态: <span id="statusText">未连接</span>
+            </div>
+        </div>
+
+        <div class="recording-indicator" id="recordingIndicator">
+            🔴 正在录音...
+        </div>
+
+        <div class="controls">
+            <button id="connectBtn">连接服务器</button>
+            <button id="startBtn" disabled>开始录音</button>
+            <button id="stopBtn" disabled>停止录音</button>
+        </div>
+
+        <div class="message-container">
+            <div id="messages"></div>
+            <button class="clear-btn" onclick="document.getElementById('messages').innerHTML = ''">清空日志</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+
+        const connectBtn = document.getElementById('connectBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const messagesDiv = document.getElementById('messages');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+
+        function addMessage(type, content, timestamp = new Date().toLocaleTimeString()) {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.innerHTML = `
+                <div>${content}</div>
+                <div class="timestamp">${timestamp}</div>
+            `;
+            messagesDiv.appendChild(msg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            isConnected = connected;
+            if (connected) {
+                statusDot.classList.add('connected');
+                statusText.textContent = '已连接 ✓';
+                connectBtn.textContent = '断开连接';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            } else {
+                statusDot.classList.remove('connected');
+                statusText.textContent = '未连接 ✗';
+                connectBtn.textContent = '连接服务器';
+                startBtn.disabled = true;
+                stopBtn.disabled = true;
+                recordingIndicator.classList.remove('active');
+            }
+        }
+
+        connectBtn.addEventListener('click', () => {
+            if (isConnected) {
+                ws.close();
+                updateStatus(false);
+                addMessage('info', '已断开连接');
+            } else {
+                connectWebSocket();
+            }
+        });
+
+        startBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'start_recording',
+                    timestamp: Date.now()
+                }));
+                recordingIndicator.classList.add('active');
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                addMessage('info', '🔴 开始录音...');
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'stop_recording',
+                    timestamp: Date.now()
+                }));
+                recordingIndicator.classList.remove('active');
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                addMessage('info', '⏹️ 停止录音，正在处理...');
+            }
+        });
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.hostname}:8888/device`;
+
+            addMessage('info', `正在连接到 ${wsUrl}...`);
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateStatus(true);
+                addMessage('success', '✓ WebSocket 连接成功！');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    // Try to parse as JSON
+                    if (typeof event.data === 'string') {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'text_response') {
+                            addMessage('response', `💬 回复: ${data.content}`, 
+                                new Date(data.timestamp).toLocaleTimeString());
+                        } else if (data.type === 'error') {
+                            addMessage('error', `❌ 错误: ${data.message}`);
+                        } else if (data.type === 'audio_response_complete') {
+                            addMessage('success', '✓ 音频响应已发送完毕');
+                        } else if (data.type === 'info') {
+                            addMessage('info', `ℹ️ ${data.message}`);
+                        } else {
+                            addMessage('info', `📨 收到消息: ${JSON.stringify(data)}`);
+                        }
+                    } else if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
+                        // Binary audio data
+                        const size = event.data.size || event.data.byteLength;
+                        addMessage('info', `🔊 收到音频数据 (${(size / 1024).toFixed(2)} KB)`);
+                    }
+                } catch (e) {
+                    // Binary data, not JSON
+                    if (event.data instanceof ArrayBuffer) {
+                        const size = event.data.byteLength;
+                        addMessage('info', `🔊 收到二进制数据 (${(size / 1024).toFixed(2)} KB)`);
+                    }
+                }
+            };
+
+            ws.onerror = (error) => {
+                addMessage('error', `⚠️ WebSocket 错误: ${error}`);
+                updateStatus(false);
+            };
+
+            ws.onclose = () => {
+                addMessage('error', '❌ WebSocket 连接已关闭');
+                updateStatus(false);
+            };
+        }
+
+        // Auto-connect on load (optional)
+        // connectWebSocket();
+    </script>
+</body>
+</html>

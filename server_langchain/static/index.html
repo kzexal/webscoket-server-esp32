@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microphone to Speaker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        #toggleAudio, #uploadButton {
+            font-size: 18px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #toggleAudio:hover, #uploadButton:hover {
+            background-color: #45a049;
+        }
+        #fileInput {
+            display: none;
+        }
+        #uploadButton {
+            background-color: #2196F3;
+        }
+        #uploadButton:hover {
+            background-color: #0b7dda;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            min-height: 20px;
+            max-width: 500px;
+            text-align: center;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button id="toggleAudio">Start Audio</button>
+        <div>
+            <input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.aac">
+            <button id="uploadButton">📁 Chọn File Audio</button>
+        </div>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        // Create audio context
+        const BUFFER_SIZE = 4800;
+        class Player {
+            constructor() {
+                this.playbackNode = null;
+            }
+
+            async init(sampleRate) {
+                const audioContext = new AudioContext({ sampleRate });
+                await audioContext.audioWorklet.addModule("/static/audio-playback-worklet.js");
+
+                this.playbackNode = new AudioWorkletNode(audioContext, "audio-playback-worklet");
+                this.playbackNode.connect(audioContext.destination);
+            }
+
+            play(buffer) {
+                if (this.playbackNode) {
+                    this.playbackNode.port.postMessage(buffer);
+                }
+            }
+
+            stop() {
+                if (this.playbackNode) {
+                    this.playbackNode.port.postMessage(null);
+                }
+            }
+        }   
+
+        class Recorder {
+            constructor(onDataAvailable) {
+                this.onDataAvailable = onDataAvailable;
+                this.audioContext = null;
+                this.mediaStream = null;
+                this.mediaStreamSource = null;
+                this.workletNode = null;
+            }
+
+            async start(stream) {
+                try {
+                    if (this.audioContext) {
+                        await this.audioContext.close();
+                    }
+
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+
+                    await this.audioContext.audioWorklet.addModule("/static/audio-processor-worklet.js");
+
+                    this.mediaStream = stream;
+                    this.mediaStreamSource = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+                    this.workletNode = new AudioWorkletNode(this.audioContext, "audio-processor-worklet");
+                    this.workletNode.port.onmessage = event => {
+                        this.onDataAvailable(event.data.buffer);
+                    };
+
+                    this.mediaStreamSource.connect(this.workletNode);
+                    this.workletNode.connect(this.audioContext.destination);
+                } catch (error) {
+                    this.stop();
+                }
+            }
+
+            async stop() {
+                if (this.mediaStream) {
+                    this.mediaStream.getTracks().forEach(track => track.stop());
+                    this.mediaStream = null;
+                }
+
+                if (this.audioContext) {
+                    await this.audioContext.close();
+                    this.audioContext = null;
+                }
+
+                this.mediaStreamSource = null;
+                this.workletNode = null;
+            }
+        }
+
+        // Function to get microphone input and send it to WebSocket
+        async function startAudio() {
+            try {
+
+                // handle output -> speaker stuff
+                const ws = new WebSocket("ws://localhost:3000/ws");
+
+                const audioPlayer = new Player();
+                audioPlayer.init(24000);
+
+                ws.onmessage = event => {
+
+                    const data = JSON.parse(event.data);
+                    if (data?.type !== 'response.audio.delta') return;
+
+                    const binary = atob(data.delta);
+                    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+                    const pcmData = new Int16Array(bytes.buffer);
+
+                    audioPlayer.play(pcmData);
+                };
+
+                let buffer = new Uint8Array();
+
+                const appendToBuffer = (newData) => {
+                    const newBuffer = new Uint8Array(buffer.length + newData.length);
+                    newBuffer.set(buffer);
+                    newBuffer.set(newData, buffer.length);
+                    buffer = newBuffer;
+                };
+
+                const handleAudioData = (data) => {
+                    const uint8Array = new Uint8Array(data);
+                    appendToBuffer(uint8Array);
+
+                    if (buffer.length >= BUFFER_SIZE) {
+                        const toSend = new Uint8Array(buffer.slice(0, BUFFER_SIZE));
+                        buffer = new Uint8Array(buffer.slice(BUFFER_SIZE));
+
+                        const regularArray = String.fromCharCode(...toSend);
+                        const base64 = btoa(regularArray);
+
+                        ws.send(JSON.stringify({type: 'input_audio_buffer.append', audio: base64}));
+                    }
+                };
+
+                // handle microphone -> input websocket
+                const audioRecorder = new Recorder(handleAudioData);
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                await audioRecorder.start(stream);
+                
+
+            } catch (error) {
+                console.error('Error accessing the microphone', error);
+                alert('Error accessing the microphone. Please check your settings and try again.');
+            }
+        }
+
+        // Button to toggle audio
+        const toggleButton = document.getElementById('toggleAudio');
+        let isAudioOn = false;
+
+        toggleButton.addEventListener('click', async () => {
+            if (!isAudioOn) {
+                await startAudio();
+                toggleButton.textContent = 'Stop Audio';
+                isAudioOn = true;
+            } else {
+                // audioContext.suspend();
+                toggleButton.textContent = 'Start Audio';
+                isAudioOn = false;
+            }
+        });
+
+        // File upload functionality
+        const fileInput = document.getElementById('fileInput');
+        const uploadButton = document.getElementById('uploadButton');
+        const statusDiv = document.getElementById('status');
+
+        function showStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status-${type}`;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 5000);
+        }
+
+        uploadButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/aac', 'audio/x-aac'];
+            const validExtensions = ['.mp3', '.wav', '.aac'];
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validTypes.includes(file.type) && !validExtensions.includes(fileExt)) {
+                showStatus('⚠️ Định dạng file không hỗ trợ. Vui lòng chọn file MP3, WAV hoặc AAC.', 'error');
+                return;
+            }
+
+            // Validate file size (25MB max)
+            if (file.size > 25 * 1024 * 1024) {
+                showStatus('⚠️ File quá lớn. Kích thước tối đa là 25MB.', 'error');
+                return;
+            }
+
+            showStatus('📤 Đang xử lý file audio...', 'info');
+            uploadButton.disabled = true;
+            uploadButton.textContent = '⏳ Đang xử lý...';
+
+            try {
+                const formData = new FormData();
+                formData.append('audio', file);
+                formData.append('instructions', 'Please carefully listen to the audio content, understand what the user is saying, and respond in English based on the specific content in the audio. Do not just give generic greetings, but answer the specific questions or topics mentioned in the audio. Always respond in English, not Chinese.');
+
+                const response = await fetch('/api/upload-audio', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus(`✅ Thành công! AI đã phản hồi. Session ID: ${result.sessionId}`, 'success');
+                    console.log('Response:', result);
+                } else {
+                    showStatus(`❌ Lỗi: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showStatus(`❌ Lỗi khi upload: ${error.message}`, 'error');
+            } finally {
+                uploadButton.disabled = false;
+                uploadButton.textContent = '📁 Chọn File Audio';
+                fileInput.value = ''; // Reset file input
+            }
+        });
+
+    </script>
+</body>
+</html>

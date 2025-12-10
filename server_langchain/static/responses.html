@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zhipu Voice Assistant - Response Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .sessions-section {
+            margin-bottom: 40px;
+        }
+
+        .sessions-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .sessions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .session-card {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .session-card:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .session-id {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            word-break: break-all;
+            font-size: 12px;
+        }
+
+        .session-stats {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+
+        .responses-section {
+            margin-top: 40px;
+        }
+
+        .responses-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .response-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .response-item {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .response-text, .response-audio {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .response-text h3, .response-audio h3 {
+            color: #667eea;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .response-text textarea {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            resize: vertical;
+            min-height: 150px;
+            color: #333;
+        }
+
+        .response-audio audio {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+
+        .btn-download {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-download:hover {
+            background: #218838;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #f5c6cb;
+            margin: 20px 0;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            margin: 20px 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .metadata {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .refresh-btn {
+            float: right;
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+
+        .clear-float {
+            clear: both;
+        }
+
+        @media (max-width: 768px) {
+            .response-item {
+                grid-template-columns: 1fr;
+            }
+
+            .sessions-grid {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 Zhipu Voice Assistant</h1>
+            <p>Response Viewer - View all saved audio and text responses</p>
+        </header>
+
+        <div class="content">
+            <!-- Sessions Section -->
+            <div class="sessions-section">
+                <h2>
+                    📁 Response Sessions
+                    <button class="refresh-btn" onclick="loadSessions()">🔄 Refresh</button>
+                    <div class="clear-float"></div>
+                </h2>
+                <div id="sessions-container" class="sessions-grid">
+                    <div class="loading">Loading sessions...</div>
+                </div>
+            </div>
+
+            <!-- Responses Section -->
+            <div class="responses-section" id="responses-section" style="display: none;">
+                <h2 id="responses-title">Responses</h2>
+                <div id="responses-container"></div>
+            </div>
+
+            <!-- Message Container -->
+            <div id="message-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+
+        // Load all sessions on page load
+        document.addEventListener('DOMContentLoaded', loadSessions);
+
+        async function loadSessions() {
+            try {
+                const response = await fetch('/api/sessions');
+                const data = await response.json();
+                
+                const container = document.getElementById('sessions-container');
+                
+                if (!data.sessions || data.sessions.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No response sessions yet. Start recording to create sessions.</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.sessions.map(session => `
+                    <div class="session-card" onclick="loadSession('${session.id}')">
+                        <div class="session-id">📅 ${session.id}</div>
+                        <div class="session-stats">
+                            <div class="stat">
+                                <span>🎵 Audio:</span>
+                                <strong>${session.audioCount}</strong>
+                            </div>
+                            <div class="stat">
+                                <span>📝 Text:</span>
+                                <strong>${session.textCount}</strong>
+                            </div>
+                            <div class="stat">
+                                <span>Date:</span>
+                                <strong>${session.createdAt}</strong>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('sessions-container').innerHTML = 
+                    '<div class="error">Failed to load sessions. Make sure the server is running.</div>';
+            }
+        }
+
+        async function loadSession(sessionId) {
+            currentSessionId = sessionId;
+            
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    showMessage(data.error, 'error');
+                    return;
+                }
+
+                const container = document.getElementById('responses-container');
+                const section = document.getElementById('responses-section');
+                const title = document.getElementById('responses-title');
+                
+                title.textContent = `Responses from ${sessionId}`;
+                
+                if (!data.responses || data.responses.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No responses in this session.</p></div>';
+                    section.style.display = 'block';
+                    return;
+                }
+
+                container.innerHTML = data.responses.map((resp, idx) => `
+                    <div class="response-item">
+                        <div class="response-text">
+                            <h3>📝 Text Response #{resp.index}</h3>
+                            ${resp.text ? `
+                                <textarea readonly id="text-${idx}">${loadingPlaceholder()}</textarea>
+                                <button class="btn btn-download" onclick="downloadText('${sessionId}', '${resp.text}')">
+                                    💾 Download TXT
+                                </button>
+                            ` : '<p style="color: #999;">No text response</p>'}
+                        </div>
+                        <div class="response-audio">
+                            <h3>🎵 Audio Response #{resp.index}</h3>
+                            ${resp.audio ? `
+                                <audio controls style="margin-bottom: 10px;">
+                                    <source src="/api/responses/audio/${sessionId}/${resp.audio}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                                <button class="btn btn-download" onclick="downloadAudio('${sessionId}', '${resp.audio}')">
+                                    💾 Download Audio
+                                </button>
+                            ` : '<p style="color: #999;">No audio response</p>'}
+                        </div>
+                    </div>
+                `).join('');
+
+                section.style.display = 'block';
+
+                // Load text content
+                data.responses.forEach((resp, idx) => {
+                    if (resp.text) {
+                        loadTextContent(sessionId, resp.text, idx);
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading session:', error);
+                showMessage('Failed to load session', 'error');
+            }
+        }
+
+        async function loadTextContent(sessionId, filename, idx) {
+            try {
+                const response = await fetch(`/api/responses/text/${sessionId}/${filename}`);
+                const data = await response.json();
+                
+                if (data.content) {
+                    document.getElementById(`text-${idx}`).value = data.content;
+                }
+            } catch (error) {
+                console.error('Error loading text:', error);
+                document.getElementById(`text-${idx}`).value = 'Error loading text content';
+            }
+        }
+
+        function downloadText(sessionId, filename) {
+            const textArea = document.querySelector(`textarea`);
+            if (textArea) {
+                const element = document.createElement('a');
+                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(textArea.value));
+                element.setAttribute('download', filename);
+                element.style.display = 'none';
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+                showMessage('Text file downloaded!', 'success');
+            }
+        }
+
+        function downloadAudio(sessionId, filename) {
+            const link = document.createElement('a');
+            link.href = `/api/responses/audio/${sessionId}/${filename}`;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage('Audio file downloaded!', 'success');
+        }
+
+        function loadingPlaceholder() {
+            return 'Loading...';
+        }
+
+        function showMessage(message, type) {
+            const container = document.getElementById('message-container');
+            const className = type === 'error' ? 'error' : 'success';
+            container.innerHTML = `<div class="${className}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
