@@ -22,7 +22,6 @@ app.use("/", serveStatic({ path: "./static/index.html" }));
 app.use("/static/*", serveStatic({ root: "./" }));
 app.use("/responses", serveStatic({ path: "./static/responses.html" }));
 
-// API endpoint to get list of response sessions
 app.get("/api/sessions", (c) => {
   try {
     const responsesDir = path.join(process.cwd(), "responses");
@@ -59,7 +58,6 @@ app.get("/api/sessions", (c) => {
   }
 });
 
-// API endpoint to get responses from a specific session
 app.get("/api/sessions/:sessionId", (c) => {
   const sessionId = c.req.param('sessionId');
   
@@ -81,7 +79,6 @@ app.get("/api/sessions/:sessionId", (c) => {
 
     const responses = [];
     
-    // Match paired audio and text responses
     for (let i = 0; i < Math.max(audioFiles.length, textFiles.length); i++) {
       responses.push({
         index: i + 1,
@@ -106,14 +103,12 @@ app.get("/api/sessions/:sessionId", (c) => {
   }
 });
 
-// API endpoint to get text response content
 app.get("/api/responses/text/:sessionId/:filename", (c) => {
   const { sessionId, filename } = c.req.param();
   
   try {
     const filePath = path.join(process.cwd(), "responses", sessionId, "text", filename);
     
-    // Security check: ensure path is within responses directory
     if (!filePath.startsWith(path.join(process.cwd(), "responses"))) {
       return c.json({ error: 'Invalid path' }, 403);
     }
@@ -130,14 +125,12 @@ app.get("/api/responses/text/:sessionId/:filename", (c) => {
   }
 });
 
-// API endpoint to download audio response
 app.get("/api/responses/audio/:sessionId/:filename", (c) => {
   const { sessionId, filename } = c.req.param();
   
   try {
     const filePath = path.join(process.cwd(), "responses", sessionId, "audio", filename);
     
-    // Security check: ensure path is within responses directory
     if (!filePath.startsWith(path.join(process.cwd(), "responses"))) {
       return c.json({ error: 'Invalid path' }, 403);
     }
@@ -148,9 +141,8 @@ app.get("/api/responses/audio/:sessionId/:filename", (c) => {
 
     const audioData = fs.readFileSync(filePath);
     
-    // Determine content type based on file extension
     const ext = path.extname(filename).toLowerCase();
-    let contentType = 'audio/mpeg'; // default to mp3
+    let contentType = 'audio/mpeg'; 
     if (ext === '.wav') contentType = 'audio/wav';
     else if (ext === '.aac') contentType = 'audio/aac';
 
@@ -161,14 +153,12 @@ app.get("/api/responses/audio/:sessionId/:filename", (c) => {
   }
 });
 
-// API endpoint to get metadata
 app.get("/api/responses/metadata/:sessionId/:filename", (c) => {
   const { sessionId, filename } = c.req.param();
   
   try {
     const filePath = path.join(process.cwd(), "responses", sessionId, filename);
     
-    // Security check: ensure path is within responses directory
     if (!filePath.startsWith(path.join(process.cwd(), "responses"))) {
       return c.json({ error: 'Invalid path' }, 403);
     }
@@ -185,7 +175,6 @@ app.get("/api/responses/metadata/:sessionId/:filename", (c) => {
   }
 });
 
-// API endpoint to process MP3 file from recordings folder
 app.post("/api/process-file", async (c) => {
   try {
     if (!process.env.ZHIPU_API_KEY) {
@@ -194,9 +183,8 @@ app.post("/api/process-file", async (c) => {
 
     const body = await c.req.json();
     const filename = body.filename || 'test.mp3';
-    const instructions = body.instructions || "You must respond ONLY in English. If the user speaks Chinese (or any non‑English), translate it to English and respond in fluent English. Never include Chinese characters in the output. Focus on the specific audio content; do not give generic greetings.";
+    const instructions = body.instructions || "You must respond ONLY in English. Return TEXT ONLY (no audio).";
 
-    // Read MP3 file from recordings folder
     const recordingsDir = path.join(process.cwd(), "recordings");
     const filePath = path.join(recordingsDir, filename);
 
@@ -206,7 +194,6 @@ app.post("/api/process-file", async (c) => {
 
     console.log(`Processing file: ${filePath}`);
 
-    // Read audio file
     const audioBuffer = fs.readFileSync(filePath);
     const fileExt = path.extname(filename).toLowerCase().slice(1); // Remove the dot
     const audioFormat = (fileExt === 'mp3' ? 'mp3' : fileExt === 'wav' ? 'wav' : fileExt === 'aac' ? 'aac' : 'mp3') as 'mp3' | 'wav' | 'aac';
@@ -216,8 +203,6 @@ app.post("/api/process-file", async (c) => {
     // Initialize Zhipu client and response saver
     const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
     const responseSaver = new ResponseSaver();
-
-    // Send to Zhipu API
     console.log("Sending audio to Zhipu GLM-4-Voice...");
     const response = await client.chat({
       audioData: audioBuffer,
@@ -225,82 +210,49 @@ app.post("/api/process-file", async (c) => {
       text: instructions
     });
 
-    // Extract text response
+
     const responseText = client.getTextFromResponse(response);
 
-    // Save text response to file
     const textPath = responseSaver.saveTextResponse(responseText);
 
-    // Chuyển text thành audio sử dụng pyttsx3 (local TTS)
-    console.log("🎤 Converting text to speech using pyttsx3...");
+
     let audioPath: string | undefined;
     
     try {
-      // Tạo audio từ text sử dụng pyttsx3
+      const audioDir = responseSaver.getAudioDir();
       const ttsAudioFile = await textToSpeech(responseText, {
-        outputDir: path.join(process.cwd(), 'tmp')
+        outputDir: audioDir
       });
-      
-      // Đọc file audio đã tạo
+
       const audioBuffer = readAudioFile(ttsAudioFile);
-      console.log(`✅ Audio generated: ${ttsAudioFile} (${(audioBuffer.length / 1024).toFixed(2)} KB)`);
       
-      // Sau khi chuyển thành audio, hiển thị text trên terminal (đồng bộ)
-      console.log('\n' + '═'.repeat(60));
-      console.log('💬 AI Response Text:');
-      console.log('─'.repeat(60));
-      console.log(responseText);
-      console.log('─'.repeat(60));
-      console.log('═'.repeat(60) + '\n');
+      // Sau khi chuyển thành audio, hiển thị text trên terminal
+      console.log('\n' + 'AI Response Text:');
+              
+      console.log("\n" + responseText);
       
-      // Lưu audio response
-      audioPath = responseSaver.saveAudioResponse(
-        audioBuffer,
-        'wav'
-      );
-      console.log(`💾 Audio saved: ${audioPath}`);
+      // File đã được lưu trực tiếp vào responses/audio/, không cần lưu lại
+      audioPath = ttsAudioFile;
       
-      // Lưu complete response với metadata
+      // Lưu complete response với metadata 
       responseSaver.saveCompleteResponse(
         responseText,
-        audioBuffer,
-        'wav'
+        undefined,
+        'wav',
+        audioPath
       );
+
+      const fileSize = fs.statSync(audioPath).size;
+      console.log(`\nAudio generated: ${audioPath} (${(fileSize / 1024).toFixed(2)} KB)`);
       
     } catch (ttsError: any) {
-      console.error('❌ Error converting text to speech:', ttsError.message);
+      console.error('Error converting text to speech:', ttsError.message);
       
-      // Nếu pyttsx3 thất bại, thử dùng audio từ Zhipu (nếu có)
-      const audioResponse = client.getAudioFromResponse(response);
-      if (audioResponse) {
-        console.log("⚠️  Falling back to Zhipu audio response...");
-        
-        // Save audio response to file
-        audioPath = responseSaver.saveAudioResponse(
-          audioResponse.data,
-          'mp3'
-        );
-        
-        console.log(`Audio response saved to: ${audioPath}`);
-
-        // Also save complete response with metadata
-        responseSaver.saveCompleteResponse(
-          responseText,
-          audioResponse.data,
-          'mp3'
-        );
-      } else {
-        // Không có audio từ cả pyttsx3 và Zhipu
-        console.log("⚠️  No audio available");
-        
-        // Hiển thị text trên terminal
-        console.log('\n' + '═'.repeat(60));
-        console.log('💬 AI Response Text:');
-        console.log('─'.repeat(60));
-        console.log(responseText);
-        console.log('─'.repeat(60));
-        console.log('═'.repeat(60) + '\n');
-      }
+      // Nếu pyttsx3 thất bại, chỉ trả về text
+      console.log("TTS failed, returning text only");
+      console.log('\n' + 'AI Response Text:');
+              
+      console.log("\n" + responseText);
     }
 
     return c.json({
@@ -345,10 +297,8 @@ app.get(
           if (client.readyState === WebSocket.OPEN) {
             try {
               const parsed = JSON.parse(data);
-              // Send JSON messages to all connected clients
               client.send(data);
             } catch (e) {
-              // If parsing fails, send as binary
               client.send(data);
             }
           }
@@ -357,7 +307,7 @@ app.get(
 
       const agent = new ZhipuVoiceAgent({
         apiKey: process.env.ZHIPU_API_KEY,
-        instructions: "Please carefully listen to the audio content, understand what the user is saying, and respond in English based on the specific content in the audio. Do not just give generic greetings, but answer the specific questions or topics mentioned in the audio. Always respond in English, not Chinese.",
+        instructions: "You must respond ONLY in English. Return TEXT ONLY (no audio).",
         audioConfig: {
           sampleRate: 44100,
           channels: 1,
@@ -365,7 +315,6 @@ app.get(
         }
       });
 
-      // Wait for WebSocket setup
       await new Promise(resolve => setTimeout(resolve, 100));
       await agent.connect(rawWs, broadcastToClients);
     },

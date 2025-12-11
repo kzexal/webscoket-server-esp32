@@ -6,7 +6,7 @@
 const http = require('http');
 
 const filename = process.argv[2] || 'test.mp3';
-const instructions = process.argv[3] || '你好，请认真听这段音频，然后用中文和我对话。';
+const instructions = process.argv[3] || 'Only English response. Return TEXT ONLY (no audio).';
 
 const postData = JSON.stringify({
   filename: filename,

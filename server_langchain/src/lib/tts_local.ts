@@ -10,7 +10,7 @@ export interface TTSLocalOptions {
  * Chuyển text thành audio sử dụng pyttsx3 (Python - offline TTS)
  * 
  * @param text - Văn bản cần chuyển thành giọng nói
- * @param options - Tùy chọn (outputDir)
+ * @param options
  * @returns Đường dẫn file audio đã tạo (.wav)
  */
 export async function textToSpeech(
@@ -27,7 +27,7 @@ export async function textToSpeech(
         
         // Tạo tên file output (.wav)
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const outputFile = path.join(outputDir, `tts_${timestamp}.wav`);
+        const outputFile = path.join(outputDir, `response_${timestamp}.wav`);
         
         // Đường dẫn đến Python script
         const scriptPath = path.join(process.cwd(), 'recordings', 'tts_local.py');
@@ -41,7 +41,7 @@ export async function textToSpeech(
         console.log(`Converting text to speech using pyttsx3...`);
         console.log(`Text length: ${text.length} characters`);
         
-        // Xác định lệnh Python (hỗ trợ cả Windows và Unix)
+        // Xác định lệnh Python 
         const pythonCommand = process.platform === 'win32' ? 'py' : 'python3';
         const pythonArgs = process.platform === 'win32' 
             ? ['-3', scriptPath, outputFile]  // Windows: py -3 script.py output.wav
@@ -58,9 +58,6 @@ export async function textToSpeech(
         const cleanText = text.replace(/\uFEFF/g, '').trim(); // Remove BOM if any
         pythonProcess.stdin.write(cleanText, 'utf-8');
         pythonProcess.stdin.end();
-        
-        // Debug: log text preview (first 100 chars)
-        console.log(`📄 Text preview: ${cleanText.substring(0, 100)}${cleanText.length > 100 ? '...' : ''}`);
         
         let stdout = '';
         let stderr = '';
@@ -79,7 +76,6 @@ export async function textToSpeech(
                 if (fs.existsSync(outputFile)) {
                     const fileSize = fs.statSync(outputFile).size;
                     if (fileSize > 0) {
-                        console.log(`Audio generated: ${outputFile} (${(fileSize / 1024).toFixed(2)} KB)`);
                         resolve(outputFile);
                     } else {
                         reject(new Error(`Audio file is empty: ${outputFile}`));
@@ -112,9 +108,6 @@ export async function textToSpeech(
     });
 }
 
-/**
- * Đọc file audio và trả về Buffer
- */
 export function readAudioFile(filePath: string): Buffer {
     return fs.readFileSync(filePath);
 }

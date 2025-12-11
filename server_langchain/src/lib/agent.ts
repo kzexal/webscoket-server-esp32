@@ -1,4 +1,5 @@
 import { Tool, StructuredTool } from "@langchain/core/tools";
+import { ZodTypeAny } from "zod";
 import path from "path";
 import zodToJsonSchema from "zod-to-json-schema";
 import { AudioManager } from "./audio";
@@ -195,13 +196,32 @@ export class OpenAIVoiceReactAgent {
 
     private setupBinaryMessageHandler(ws: WebSocket): void {
         ws.on('message', async (data) => {
-            console.log('===Received binary message:', {
-                type: data instanceof Buffer ? 'Buffer' : 'ArrayBuffer',
-                size: Buffer.isBuffer(data) ? data.length : data.byteLength
+            const isBufferArray = Array.isArray(data);
+            const resolvedBuffer = Buffer.isBuffer(data)
+                ? data
+                : data instanceof ArrayBuffer
+                    ? Buffer.from(data)
+                    : isBufferArray
+                        ? Buffer.concat(data)
+                        : typeof data === 'string'
+                            ? Buffer.from(data)
+                            : undefined;
+
+            console.log('Received binary message:', {
+                type: Buffer.isBuffer(data)
+                    ? 'Buffer'
+                    : data instanceof ArrayBuffer
+                        ? 'ArrayBuffer'
+                        : isBufferArray
+                            ? 'Buffer[]'
+                            : typeof data,
+                size: resolvedBuffer?.length
             });
-            if (data instanceof Buffer || data instanceof ArrayBuffer) {
-                const buffer = data instanceof ArrayBuffer ? Buffer.from(data) : data;
-                await this.connection.handleIncomingAudio(buffer);
+
+            if (resolvedBuffer) {
+                await this.connection.handleIncomingAudio(resolvedBuffer);
+            } else {
+                console.warn('Received unsupported data type from WebSocket message');
             }
         });
     }
@@ -220,19 +240,9 @@ export class OpenAIVoiceReactAgent {
             type: "function",
             name: tool.name,
             description: tool.description,
-            parameters: zodToJsonSchema(tool.schema),
+            parameters: tool.schema ? zodToJsonSchema(tool.schema as ZodTypeAny) : undefined,
         }));
 
-        this.connection.sendEvent({
-            type: "session.update",
-            session: {
-                instructions: this.instructions,
-                input_audio_transcription: { model: "whisper-1" },
-                tools: toolDefs,
-                input_audio_format: "pcm16",
-                output_audio_format: "pcm16",
-            },
-        });
     }
 
     private async handleStreamEvents(

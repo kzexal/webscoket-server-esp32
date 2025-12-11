@@ -57,7 +57,6 @@ export class AudioManager {
     private recordingFilePath: string | null = null;
 
     constructor() {
-        // Don't initialize file writer in constructor
     }
 
     private initializeFileWriter(filename: string) {
@@ -74,13 +73,13 @@ export class AudioManager {
             this.writeTimeout = null;
         }
         
-        // Close existing file writer if any
+        //Đóng trình ghi tệp hiện có nếu có
         if (this.fileWriter) {
             this.fileWriter.end();
             this.fileWriter = undefined;
         }
         
-        // Reset buffer and processing state
+        //Đặt lại bộ đệm và trạng thái xử lý
         this.audioBuffer = Buffer.alloc(0);
         this.isProcessing = false;
         this.detectedFormat = null;
@@ -88,12 +87,10 @@ export class AudioManager {
     }
 
     public startRecording() {
-        // Reset any existing recording state
         this.resetRecording();
         
-        // Generate random ID for filename
+        //Tạo tên tệp với ID ngẫu nhiên
         const randomId = Math.random().toString(36).substring(2, 15);
-        // File extension will be determined when we detect format
         const tmpDir = path.join(__dirname, '../../tmp');
         if (!fs.existsSync(tmpDir)) {
             fs.mkdirSync(tmpDir, { recursive: true });
@@ -101,109 +98,85 @@ export class AudioManager {
         const filename = path.join(tmpDir, `recording-${randomId}`);
         this.recordingFilePath = filename;
         
-        console.log(`🎙️  Started new recording session: ${filename}`);
-        // Don't initialize file writer yet - wait to detect format
+        console.log(`Started new recording session: ${filename}`);
     }
 
-    /**
-     * Detect audio format from buffer header
-     */
     private detectFormat(buffer: Buffer): AudioFormat {
         if (buffer.length < 3) {
-            return AudioFormat.PCM; // Default to PCM for small buffers
+            return AudioFormat.PCM; 
         }
 
-        // Check for MP3 header (MPEG sync word: 0xFF 0xE0-0xFF)
+        //Kiểm tra định dạng MP3
         if (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0) {
             return AudioFormat.MP3;
         }
         
-        // Check for ID3 tag (MP3 with ID3v2)
         if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
             return AudioFormat.MP3;
         }
         
-        // Check for WAV header (RIFF)
+        //Kiểmểm tra định dạng WAV
         if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
             return AudioFormat.WAV;
         }
         
-        // Check for AAC ADTS header
+       
         if (buffer[0] === 0xFF && (buffer[1] & 0xF0) === 0xF0) {
-            // Could be AAC, but MP3 also starts with 0xFF, so check more carefully
-            // For now, assume MP3 if sync word matches
             return AudioFormat.MP3;
         }
-        
-        // Default to PCM (raw audio data from ESP32)
         return AudioFormat.PCM;
     }
 
     private audioBuffer: Buffer = Buffer.alloc(0);
-    private readonly WRITE_DELAY = 500; // Reduced to 500ms for more responsive writes
-    private readonly MAX_BUFFER_SIZE = 1024 * 1024; // 1MB max buffer size to prevent memory issues
-    private readonly MIN_BUFFER_SIZE = this.config.sampleRate; // 1 second worth of audio data
+    private readonly WRITE_DELAY = 500; 
+    private readonly MAX_BUFFER_SIZE = 1024 * 1024; 
+    private readonly MIN_BUFFER_SIZE = this.config.sampleRate; 
 
     public handleAudioBuffer(buffer: Buffer): void {
         try {
-            // Detect format on first buffer if not detected yet
+            //Xác định định dạng trong bộ đệm đầu tiên
             if (this.detectedFormat === null && buffer.length > 0) {
                 this.detectedFormat = this.detectFormat(buffer);
-                console.log(`🎵 Detected audio format: ${this.detectedFormat}`);
-                
-                // Initialize file writer only for PCM/WAV format
+                console.log(`Detected audio format: ${this.detectedFormat}`);
                 if (this.detectedFormat === AudioFormat.PCM || this.detectedFormat === AudioFormat.WAV) {
                     if (this.recordingFilePath) {
                         const filename = `${this.recordingFilePath}.wav`;
                         this.initializeFileWriter(filename);
-                        console.log(`📝 Initialized WAV file writer: ${filename}`);
+                        console.log(`Initialized WAV file writer: ${filename}`);
                     }
                 } else if (this.detectedFormat === AudioFormat.MP3 || this.detectedFormat === AudioFormat.AAC) {
-                    // For MP3/AAC, we'll save directly to file, no WAV writer needed
                     if (this.recordingFilePath) {
                         const ext = this.detectedFormat === AudioFormat.MP3 ? 'mp3' : 'aac';
                         this.recordingFilePath = `${this.recordingFilePath}.${ext}`;
-                        console.log(`📝 Will save compressed audio to: ${this.recordingFilePath}`);
+                        console.log(`Will save compressed audio to: ${this.recordingFilePath}`);
                     }
                 }
             }
-
-            // Check if adding new buffer would exceed max size
             if (this.audioBuffer.length + buffer.length > this.MAX_BUFFER_SIZE) {
-                // Process existing buffer before adding more
                 this.processAndWriteBuffer();
             }
 
-            // Concatenate incoming buffer with existing data
             this.audioBuffer = Buffer.concat([this.audioBuffer, buffer]);
-
-            // For compressed formats (MP3/AAC), don't use WAV writer
             if (this.detectedFormat === AudioFormat.MP3 || this.detectedFormat === AudioFormat.AAC) {
-                // Just accumulate buffer, will save directly when stop_recording
                 return;
             }
 
-            // For PCM/WAV, use existing write logic
-            // Reset the write timeout
             if (this.writeTimeout) {
                 clearTimeout(this.writeTimeout);
             }
 
-            // Set new timeout to trigger write
             this.writeTimeout = setTimeout(() => {
                 if (this.audioBuffer.length > 0) {
                     this.processAndWriteBuffer();
                 }
             }, this.WRITE_DELAY);
 
-            // If buffer exceeds minimum size, process immediately
             if (this.audioBuffer.length >= this.MIN_BUFFER_SIZE && !this.isProcessing) {
                 this.processAndWriteBuffer();
             }
 
         } catch (error) {
             console.error('Error handling audio buffer:', error);
-            // Log more details about the error
             if (error instanceof Error) {
                 console.error('Error details:', error.message, error.stack);
             }
@@ -213,7 +186,6 @@ export class AudioManager {
     }
 
     private processAndWriteBufferSimple(): void {
-        // Log the current state before processing
         console.log('******Processing audio buffer:', {
             bufferSize: this.audioBuffer.length,
             hasFileWriter: !!this.fileWriter,
@@ -230,13 +202,9 @@ export class AudioManager {
 
         try {
             this.isProcessing = true;
-            // Write buffer and clear in one atomic operation
             const bufferToWrite = this.audioBuffer;
             this.audioBuffer = Buffer.alloc(0);
-            
             this.fileWriter.write(bufferToWrite);
-            
-            // Log successful write
             console.log(`Successfully wrote ${bufferToWrite.length} bytes of audio data`);
         } catch (error) {
             console.error('Error writing audio buffer:', error);
@@ -247,24 +215,18 @@ export class AudioManager {
 
     public getCurrentBuffer(): Buffer {
         try {
-            // For compressed formats (MP3/AAC), return buffer directly
             if (this.detectedFormat === AudioFormat.MP3 || this.detectedFormat === AudioFormat.AAC) {
-                console.log(`📦 Getting buffer for ${this.detectedFormat.toUpperCase()}: ${this.audioBuffer.length} bytes`);
+                console.log(`Getting buffer for ${this.detectedFormat.toUpperCase()}: ${this.audioBuffer.length} bytes`);
                 if (this.audioBuffer.length > 0) {
-                    // Save compressed audio to file
                     if (this.recordingFilePath) {
                         fs.writeFileSync(this.recordingFilePath, this.audioBuffer);
-                        console.log(`✅ Saved ${this.detectedFormat.toUpperCase()} file: ${this.recordingFilePath} (${(this.audioBuffer.length / 1024).toFixed(2)} KB)`);
-                    } else {
-                        console.warn('⚠️  No recording file path set, cannot save MP3 file');
+                        console.log(`Saved ${this.detectedFormat.toUpperCase()} file: ${this.recordingFilePath} (${(this.audioBuffer.length / 1024).toFixed(2)} KB)`);
                     }
                     return this.audioBuffer;
                 }
-                console.warn('⚠️  Audio buffer is empty!');
+                console.warn('Audio buffer is empty!');
                 return Buffer.alloc(0);
             }
-
-            // For PCM/WAV, read from file
             if (!this.fileWriter) {
                 console.error('No file writer available');
                 return Buffer.alloc(0);
@@ -272,7 +234,7 @@ export class AudioManager {
 
             const audioFilePath = this.fileWriter.path;
             const fileBuffer = fs.readFileSync(audioFilePath);
-            console.log(`✅ Successfully read audio file: ${audioFilePath}`);
+            console.log(`Successfully read audio file: ${audioFilePath}`);
             return fileBuffer;
         } catch (error) {
             console.error('Error reading current audio buffer:', error);
@@ -280,15 +242,14 @@ export class AudioManager {
         }
     }
 
-    /**
-     * Get detected audio format
-     */
+    
+     //Lấy định dạng âm thanh đã phát hiện
+     
     public getDetectedFormat(): AudioFormat | null {
         return this.detectedFormat;
     }
 
     private processAndWriteBuffer(): void {
-        // return this.processAndWriteBufferWithGain();
         return this.processAndWriteBufferSimple();
     }
 
@@ -297,15 +258,13 @@ export class AudioManager {
 
         this.isProcessing = true;
         try {
-            // Convert buffer to 16-bit PCM samples
+            //Chuyển đổi buffer thành mẫu PCM 16-bit
             const samples = new Int16Array(this.audioBuffer.length / 2);
             for (let i = 0; i < this.audioBuffer.length; i += 2) {
-                // Read samples directly without distortion
                 const sample = this.audioBuffer.readInt16LE(i);
                 samples[i / 2] = sample;
             }
 
-            // Process audio only if there's meaningful data
             const maxAmplitude = Math.max(...Array.from(samples).map(Math.abs));
             
             if (maxAmplitude > 100) {
@@ -316,7 +275,7 @@ export class AudioManager {
                 console.log('Skipping buffer - insufficient audio level');
             }
 
-            // Clear the buffer after processing
+            //Xoá bộ đệm sau khi xử lý
             this.audioBuffer = Buffer.alloc(0);
         } finally {
             this.isProcessing = false;
@@ -324,14 +283,13 @@ export class AudioManager {
     }
     private processAudioSamples(samples: Int16Array, maxAmplitude: number): Buffer {
         const processedSamples = new Int16Array(samples.length);
-        const GAIN = 0.1; // Gain factor for normalization
-        // Reduce normalization intensity
+        const GAIN = 0.1; 
         const normalizeRatio = maxAmplitude > 0 ? (32767 / maxAmplitude) * GAIN : 1;
-        const noiseFloor = 15; // Increased noise floor
-        const maxVal = 32767 * 0.6; // Reduced maximum value to prevent clipping
+        const noiseFloor = 15; 
+        const maxVal = 32767 * 0.6;
         
-        let prevSample = 0; // For simple low-pass filter
-        const smoothingFactor = 0.1; // Adjust between 0 and 1
+        let prevSample = 0; 
+        const smoothingFactor = 0.1;
 
         for (let i = 0; i < samples.length; i++) {
             if (Math.abs(samples[i]) < noiseFloor) {
@@ -341,7 +299,6 @@ export class AudioManager {
 
             let normalizedSample = samples[i] * normalizeRatio;
             
-            // Apply simple low-pass filter
             normalizedSample = prevSample + smoothingFactor * (normalizedSample - prevSample);
             prevSample = normalizedSample;
 
@@ -354,28 +311,23 @@ export class AudioManager {
     }
 
     public closeFile(): void {
-        console.log('📝 Closing file writer');
+        console.log('Closing file writer');
         if (this.writeTimeout) {
             clearTimeout(this.writeTimeout);
             this.writeTimeout = null;
         }
-        
-        // For compressed formats, no file writer to close
-        if (this.detectedFormat === AudioFormat.MP3 || this.detectedFormat === AudioFormat.AAC) {
-            console.log(`📝 MP3/AAC format - no file writer to close, buffer will be saved in getCurrentBuffer()`);
-            return;
-        }
-        
-        // Process any remaining audio data for PCM/WAV
+
+       
+
         if (this.audioBuffer.length > 0) {
-            console.log(`📝 Processing remaining ${this.audioBuffer.length} bytes before closing`);
+            console.log(`Processing remaining ${this.audioBuffer.length} bytes before closing`);
             this.processAndWriteBuffer();
         }
-        // Close file writer
+  
         if (this.fileWriter) {
             this.fileWriter.end();
-            console.log('✅ WAV file writer closed');
-            // Don't clear fileWriter yet - need it for getCurrentBuffer()
+            console.log('WAV file writer closed');
+
         }
     }
 }

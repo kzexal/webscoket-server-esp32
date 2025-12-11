@@ -85,7 +85,7 @@ ws.on('message', (data) => {
     audioChunksReceived++;
     audioResponseSize += size;
     
-    process.stdout.write(`\r🔊 Received audio chunk #${audioChunksReceived}: ${size} bytes (Total: ${(audioResponseSize / 1024).toFixed(2)} KB)`);
+    process.stdout.write(`\rReceived audio chunk #${audioChunksReceived}: ${size} bytes (Total: ${(audioResponseSize / 1024).toFixed(2)} KB)`);
   } else if (typeof data === 'string') {
     // Text message từ server
     try {
@@ -93,47 +93,46 @@ ws.on('message', (data) => {
       
       if (message.type === 'text_response') {
         textResponse = message.content;
-        console.log('\n\n💬 AI Text Response:');
+        console.log('\nAI Text Response:');
         console.log('─'.repeat(60));
         console.log(textResponse);
         console.log('─'.repeat(60));
       } else if (message.type === 'audio_response_complete') {
-        console.log('\n\n✅ Audio response complete!');
-        console.log(`📊 Total audio received: ${(audioResponseSize / 1024).toFixed(2)} KB`);
-        console.log(`📦 Total chunks: ${audioChunksReceived}`);
+        console.log('\nAudio response complete!');
+        console.log(`Total audio received: ${(audioResponseSize / 1024).toFixed(2)} KB`);
+        console.log(`Total chunks: ${audioChunksReceived}`);
       } else if (message.type === 'error') {
-        console.error('\n\n❌ Error:', message.message);
+        console.error('\nError:', message.message);
       } else if (message.type === 'info') {
-        console.log('\nℹ️  Info:', message.message);
+        console.log('\nℹInfo:', message.message);
       } else {
-        console.log('\n📨 Message:', message);
+        console.log('\nMessage:', message);
       }
     } catch (e) {
       // Không phải JSON, in ra trực tiếp
-      console.log('\n📨 Raw message:', data.toString());
+      console.log('\nRaw message:', data.toString());
     }
   }
 });
 
 ws.on('error', (error) => {
-  console.error('\n❌ WebSocket error:', error.message);
-  console.error('💡 Make sure server is running on port 8888');
+  console.error('\nWebSocket error:', error.message);
+  console.error('Make sure server is running on port 8888');
 });
 
 ws.on('close', () => {
   console.log('\n\n🔌 WebSocket closed');
-  console.log('\n📊 Summary:');
+  console.log('\nSummary:');
   console.log(`  - Audio chunks sent: ${Math.ceil(audioData.length / CHUNK_SIZE)}`);
   console.log(`  - Audio chunks received: ${audioChunksReceived}`);
-  console.log(`  - Text response: ${textResponse ? '✅ Received' : '❌ Not received'}`);
   console.log(`  - Audio response size: ${(audioResponseSize / 1024).toFixed(2)} KB`);
-  console.log('\n💡 Check responses/ folder for saved files\n');
+  console.log('\nCheck responses/ folder for saved files\n');
   process.exit(0);
 });
 
 // Handle Ctrl+C
 process.on('SIGINT', () => {
-  console.log('\n\n⚠️  Interrupted by user');
+  console.log('\nInterrupted by user');
   ws.close();
   process.exit(0);
 });

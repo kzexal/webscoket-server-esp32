@@ -67,10 +67,10 @@ export class ResponseSaver {
                 fs.writeFileSync(filepath, audioData);
             }
 
-            console.log(`✅ Audio saved: ${filepath}`);
+            console.log(`Audio saved: ${filepath}`);
             return filepath;
         } catch (error) {
-            console.error(`❌ Failed to save audio: ${error}`);
+            console.error(`Failed to save audio: ${error}`);
             throw error;
         }
     }
@@ -86,10 +86,9 @@ export class ResponseSaver {
 
         try {
             fs.writeFileSync(filepath, text, 'utf-8');
-            console.log(`✅ Text saved: ${filepath}`);
             return filepath;
         } catch (error) {
-            console.error(`❌ Failed to save text: ${error}`);
+            console.error(`Failed to save text: ${error}`);
             throw error;
         }
     }
@@ -100,20 +99,29 @@ export class ResponseSaver {
     public saveCompleteResponse(
         textContent: string,
         audioData?: string | Buffer,
-        audioFormat: 'mp3' | 'wav' | 'aac' = 'mp3'
+        audioFormat: 'mp3' | 'wav' | 'aac' = 'mp3',
+        existingAudioPath?: string
     ): ResponseData {
         const timestamp = new Date().toISOString();
-        let audioPath: string | undefined;
+        let audioPath: string | undefined = existingAudioPath;
         let audioSize: number | undefined;
 
         // Save audio if provided
-        if (audioData) {
+        if (!audioPath && audioData) {
             audioPath = this.saveAudioResponse(audioData, audioFormat);
-            if (typeof audioData === 'string') {
-                audioSize = Buffer.from(audioData, 'base64').length;
-            } else {
-                audioSize = audioData.length;
+        }
+
+        // Determine audio size
+        if (audioPath) {
+            try {
+                audioSize = fs.statSync(audioPath).size;
+            } catch {
+                // ignore size errors
             }
+        } else if (audioData) {
+            audioSize = typeof audioData === 'string'
+                ? Buffer.from(audioData, 'base64').length
+                : audioData.length;
         }
 
         // Save text
@@ -153,10 +161,8 @@ export class ResponseSaver {
                 JSON.stringify(metadataContent, null, 2),
                 'utf-8'
             );
-
-            console.log(`✅ Metadata saved: ${metadataPath}`);
         } catch (error) {
-            console.error(`❌ Failed to save metadata: ${error}`);
+            console.error(`Failed to save metadata: ${error}`);
         }
     }
 
@@ -177,9 +183,9 @@ export class ResponseSaver {
                 'utf-8'
             );
 
-            console.log(`✅ Session summary saved: ${summaryPath}`);
+            console.log(`Session summary saved: ${summaryPath}`);
         } catch (error) {
-            console.error(`❌ Failed to save summary: ${error}`);
+            console.error(`Failed to save summary: ${error}`);
         }
     }
 
@@ -220,9 +226,9 @@ responses/
 
             const indexPath = path.join(sessionDir, 'index.md');
             fs.writeFileSync(indexPath, indexContent, 'utf-8');
-            console.log(`✅ Index created: ${indexPath}`);
+            console.log(`Index created: ${indexPath}`);
         } catch (error) {
-            console.error(`❌ Failed to create index: ${error}`);
+            console.error(`Failed to create index: ${error}`);
         }
     }
 
@@ -238,6 +244,13 @@ responses/
      */
     public getSessionId(): string {
         return this.currentSession;
+    }
+
+    /**
+     * Get audio directory path for current session
+     */
+    public getAudioDir(): string {
+        return path.join(this.responsesDir, this.currentSession, 'audio');
     }
 
     /**

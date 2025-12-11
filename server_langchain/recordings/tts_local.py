@@ -20,7 +20,7 @@ def get_available_voices():
         voice_list.append(voice)
     return voice_list
 
-def text_to_speech(text, output_filename="response_audio.wav"):
+def text_to_speech(text, output_filename="response_audio.mp3"):
     """
     Converts text to speech using offline engine (SAPI5 on Windows).
     Saves to file instead of playing immediately.
@@ -36,29 +36,13 @@ def text_to_speech(text, output_filename="response_audio.wav"):
     try:
         print(f"Generating audio for: {text[:30]}...")
         
-        # --- CONFIGURATION ---
-        # 1. Speed (Rate): Default is 200, lower is slower
         engine.setProperty('rate', 170) 
-        
-        # 2. Volume: 0.0 to 1.0
         engine.setProperty('volume', 1.0)
 
-        # 3. Voice Selection
-        # Windows usually provides Microsoft David (Eng) and Microsoft An (Vietnamese - if installed)
         voices = engine.getProperty('voices')
         
-        # Simple logic to select voice based on text content (optional)
-        # By default, index 0 is usually English, index 1 might be Vietnamese if installed
-        # You can force specific ID from get_available_voices()
-        
-        # Uncomment to force a specific voice ID (Run get_available_voices first to find ID)
-        # engine.setProperty('voice', voices[1].id) 
-
-        # Save to file
-        # Note: pyttsx3 on Windows usually saves as .wav
         engine.save_to_file(text, output_filename)
         
-        # Must run this to process the command
         engine.runAndWait()
         
         if os.path.exists(output_filename):
@@ -93,7 +77,7 @@ if __name__ == "__main__":
             sys.exit(1)
         output_file = sys.argv[1]
     else:
-        # Đọc từ command line arguments (backward compatibility)
+        # Đọc từ command line arguments
         if len(sys.argv) < 3:
             print("Usage: python tts_local.py <text> <output_file>", file=sys.stderr)
             print("   or: python tts_local.py <output_file> < text.txt", file=sys.stderr)

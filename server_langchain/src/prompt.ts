@@ -172,4 +172,4 @@ Avoid listing or enumerating items
 
 Your responses should feel like natural speech rather than written text. Focus on clear communication while maintaining an engaging conversational style.`;
 
-export const INSTRUCTIONS = BUSINESS_CONSULTANT_INSTRUCTIONS + "\n\n" + GLOBAL_PROMPT;
+export const  = BUSINESS_CONSULTANT_INSTRUCTIONS + "\n\n" + GLOBAL_PROMPT;
