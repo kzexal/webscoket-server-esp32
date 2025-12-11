@@ -186,17 +186,7 @@ export class AudioManager {
     }
 
     private processAndWriteBufferSimple(): void {
-        console.log('******Processing audio buffer:', {
-            bufferSize: this.audioBuffer.length,
-            hasFileWriter: !!this.fileWriter,
-            isProcessing: this.isProcessing
-        });
         if (!this.fileWriter || this.audioBuffer.length === 0 || this.isProcessing) {
-            console.log('Skipping write - conditions not met:', {
-                hasFileWriter: !!this.fileWriter,
-                bufferLength: this.audioBuffer.length,
-                isProcessing: this.isProcessing
-            });
             return;
         }
 
@@ -320,7 +310,6 @@ export class AudioManager {
        
 
         if (this.audioBuffer.length > 0) {
-            console.log(`Processing remaining ${this.audioBuffer.length} bytes before closing`);
             this.processAndWriteBuffer();
         }
   

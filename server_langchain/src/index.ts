@@ -10,7 +10,12 @@ import * as path from 'path';
 import { ZhipuVoiceAgent } from "./lib/zhipu_agent";
 import { ZhipuAiClient } from "./lib/zhipu_client";
 import { ResponseSaver } from "./lib/response_saver";
-import { textToSpeech, readAudioFile } from "./lib/tts_local";
+import { 
+    processAudioWithZhipu, 
+    processTTSResponse, 
+    formatAudioProcessingError,
+    detectAudioFormatFromBuffer
+} from "./lib/audio_processor";
 
 const app = new Hono();
 const WS_PORT = 8888;
@@ -203,15 +208,14 @@ app.post("/api/process-file", async (c) => {
     // Initialize Zhipu client and response saver
     const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
     const responseSaver = new ResponseSaver();
-    console.log("Sending audio to Zhipu GLM-4-Voice...");
-    const response = await client.chat({
-      audioData: audioBuffer,
-      audioFormat: audioFormat,
-      text: instructions
+    
+    const responseText = await processAudioWithZhipu({
+      audioBuffer,
+      audioFormat,
+      instructions,
+      client,
+      responseSaver
     });
-
-
-    const responseText = client.getTextFromResponse(response);
 
     const textPath = responseSaver.saveTextResponse(responseText);
 
@@ -219,31 +223,12 @@ app.post("/api/process-file", async (c) => {
     let audioPath: string | undefined;
     
     try {
-      const audioDir = responseSaver.getAudioDir();
-      const ttsAudioFile = await textToSpeech(responseText, {
-        outputDir: audioDir
-      });
-
-      const audioBuffer = readAudioFile(ttsAudioFile);
-      
-      // Sau khi chuyển thành audio, hiển thị text trên terminal
-      console.log('\n' + 'AI Response Text:');
-              
-      console.log("\n" + responseText);
-      
-      // File đã được lưu trực tiếp vào responses/audio/, không cần lưu lại
-      audioPath = ttsAudioFile;
-      
-      // Lưu complete response với metadata 
-      responseSaver.saveCompleteResponse(
+      const ttsResult = await processTTSResponse({
         responseText,
-        undefined,
-        'wav',
-        audioPath
-      );
-
-      const fileSize = fs.statSync(audioPath).size;
-      console.log(`\nAudio generated: ${audioPath} (${(fileSize / 1024).toFixed(2)} KB)`);
+        responseSaver
+      });
+      
+      audioPath = ttsResult.audioFilePath;
       
     } catch (ttsError: any) {
       console.error('Error converting text to speech:', ttsError.message);
@@ -251,7 +236,6 @@ app.post("/api/process-file", async (c) => {
       // Nếu pyttsx3 thất bại, chỉ trả về text
       console.log("TTS failed, returning text only");
       console.log('\n' + 'AI Response Text:');
-              
       console.log("\n" + responseText);
     }
 
@@ -266,16 +250,7 @@ app.post("/api/process-file", async (c) => {
 
   } catch (error: any) {
     console.error('Error processing file:', error);
-    
-    let errorMessage = 'Failed to process audio file';
-    if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Request timeout: Audio file too large. Use MP3 format.';
-    } else if (error.response?.status === 413) {
-      errorMessage = 'Audio payload too large. Use MP3 format to compress.';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
+    const errorMessage = formatAudioProcessingError(error);
     return c.json({ error: errorMessage }, 500);
   }
 });
