@@ -1,7 +1,8 @@
-import { ZhipuAiClient, ZhipuResponse } from "./zhipu_client";
+import { ZhipuAiClient } from "./zhipu_client";
 import { ResponseSaver } from "./response_saver";
 import { textToSpeech, readAudioFile } from "./tts_local";
 import { AudioFormat } from "./audio";
+import { DeepgramService } from "./deepgram_service"; // Import mới
 import * as fs from 'fs';
 
 export interface ProcessAudioOptions {
@@ -10,6 +11,7 @@ export interface ProcessAudioOptions {
     detectedFormat?: AudioFormat | null;
     instructions?: string;
     client: ZhipuAiClient;
+    deepgramClient: DeepgramService; // [MỚI] Thêm Deepgram Client vào đây
     responseSaver: ResponseSaver;
 }
 
@@ -59,31 +61,69 @@ export function detectAudioFormatFromBuffer(audioBuffer: Buffer, detectedFormat?
 }
 
 /**
- * Xử lý audio buffer: gửi đến Zhipu API và nhận text response
+ * Xử lý input (audio hoặc text): gửi đến Zhipu API và nhận text response
+ * Sử dụng streaming mode để giảm độ trễ
  */
 export async function processAudioWithZhipu(options: ProcessAudioOptions): Promise<string> {
-    const { audioBuffer, audioFormat, detectedFormat, instructions, client } = options;
+    const { audioBuffer, audioFormat, detectedFormat, instructions, client, deepgramClient } = options;
     
-    // Cảnh báo nếu audio quá lớn
-    if (audioBuffer.length > 500 * 1024) {
-        console.warn(`Audio size ${(audioBuffer.length / 1024 / 1024).toFixed(2)}MB is large`);
-        console.warn('Recommendation: Use MP3 format instead of WAV for faster processing');
+    // 1. Xác định format
+    const finalFormat = audioFormat || detectAudioFormatFromBuffer(audioBuffer, detectedFormat);
+    const mimeType = finalFormat === 'mp3' ? 'audio/mpeg' : 'audio/wav';
+
+    // 2. [QUAN TRỌNG] Gọi Deepgram để lấy Text từ Audio với streaming mode
+    // Sử dụng streaming để phù hợp với ESP32 real-time audio
+    let userTranscript = "";
+    try {
+        // Chia audio buffer thành chunks nhỏ để stream (giả lập real-time)
+        const CHUNK_SIZE = 4096; // 4KB chunks
+        const chunks: Buffer[] = [];
+        for (let i = 0; i < audioBuffer.length; i += CHUNK_SIZE) {
+            chunks.push(audioBuffer.slice(i, i + CHUNK_SIZE));
+        }
+
+        if (chunks.length > 0) {
+            // Sử dụng streaming transcription (phù hợp cho ESP32 real-time)
+            // Logging được xử lý trong deepgram_service.ts, không cần log lại ở đây
+            userTranscript = await deepgramClient.transcribeStream(chunks, mimeType);
+        } else {
+            // Fallback nếu không có chunks
+            userTranscript = await deepgramClient.transcribe(audioBuffer, mimeType);
+        }
+    } catch (error) {
+        console.error("STT Error, falling back to empty text:", error);
     }
 
-    const finalFormat = audioFormat || detectAudioFormatFromBuffer(audioBuffer, detectedFormat);
-    console.log(`Sending audio to Zhipu GLM-4-Voice (format: ${finalFormat}, timeout: 120s)...`);
-    
-    const finalInstructions = instructions || "You must respond ONLY in English. Return TEXT ONLY (no audio).";
-    console.log(`Instructions: ${finalInstructions.substring(0, 1000)}`);
-    
-    const response = await client.chat({
-        audioData: audioBuffer,
-        audioFormat: finalFormat,
-        text: finalInstructions
-    });
+    // Nếu không nghe thấy gì, có thể return luôn hoặc để Zhipu xử lý
+    if (!userTranscript.trim()) {
+        console.log("No speech detected via Deepgram.");
+        return "I didn't hear anything.";
+    }
 
-    const responseText = client.getTextFromResponse(response);
-    return responseText;
+    console.log(`Sending transcript to Zhipu: "${userTranscript}"`);
+
+    // 3. Gửi Text (Transcript) đến Zhipu GLM-4-FlashX với streaming mode
+    // System prompt được cập nhật để giới hạn response ~70 từ
+    const defaultSystemPrompt = "You are a helpful assistant. Keep your response concise and under 70 words. Be direct and to the point.";
+    let fullResponse = "";
+    try {
+        console.log(`← Zhipu:`); // Bắt đầu response từ Zhipu
+        fullResponse = await client.chatStream({
+            text: userTranscript,
+            systemPrompt: instructions || defaultSystemPrompt
+            // onChunk được xử lý trong zhipu_client.ts
+        });
+    } catch (error) {
+        // Fallback về non-streaming nếu streaming thất bại
+        console.warn("Streaming failed, falling back to non-streaming mode:", error);
+        const response = await client.chat({
+            text: userTranscript,
+            systemPrompt: instructions || defaultSystemPrompt
+        });
+        fullResponse = client.getTextFromResponse(response);
+    }
+
+    return fullResponse;
 }
 
 /**
@@ -93,6 +133,8 @@ export async function processTTSResponse(options: ProcessTTSOptions): Promise<Pr
     const { responseText, responseSaver } = options;
     
     const audioDir = responseSaver.getAudioDir();
+    
+    // Gọi hàm TTS local (eSpeak hoặc thư viện khác bạn đã cài)
     const audioFilePath = await textToSpeech(responseText, {
         outputDir: audioDir
     });
@@ -101,12 +143,14 @@ export async function processTTSResponse(options: ProcessTTSOptions): Promise<Pr
     
     // Log response text
     console.log('\n' + 'AI Response Text:');
-    console.log("\n" + responseText);
+    console.log("--------------------------------------------------");
+    console.log(responseText);
+    console.log("--------------------------------------------------");
     
     // Lưu complete response với metadata
     responseSaver.saveCompleteResponse(
         responseText,
-        undefined,
+        undefined, // Input text (chưa lưu ở đây)
         'wav',
         audioFilePath
     );
@@ -125,14 +169,5 @@ export async function processTTSResponse(options: ProcessTTSOptions): Promise<Pr
  * Format error message từ exception
  */
 export function formatAudioProcessingError(error: any): string {
-    let errorMessage = 'Failed to process audio';
-    if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Request timeout: Audio file too large. Use MP3 format.';
-    } else if (error.response?.status === 413) {
-        errorMessage = 'Audio payload too large. Use MP3 format to compress.';
-    } else if (error.message) {
-        errorMessage = error.message;
-    }
-    return errorMessage;
+    return error.message || "Unknown error";
 }
-

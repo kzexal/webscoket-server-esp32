@@ -10,6 +10,7 @@ import * as path from 'path';
 import { ZhipuVoiceAgent } from "./lib/zhipu_agent";
 import { ZhipuAiClient } from "./lib/zhipu_client";
 import { ResponseSaver } from "./lib/response_saver";
+import { DeepgramService } from "./lib/deepgram_service";
 import { 
     processAudioWithZhipu, 
     processTTSResponse, 
@@ -205,8 +206,13 @@ app.post("/api/process-file", async (c) => {
 
     console.log(`Audio format: ${audioFormat}, size: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
 
-    // Initialize Zhipu client and response saver
+    // Initialize clients and response saver
     const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
+   const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+        if (!deepgramApiKey) {
+            throw new Error("DEEPGRAM_API_KEY is not set");
+        };
+    const deepgramClient = new DeepgramService(deepgramApiKey);
     const responseSaver = new ResponseSaver();
     
     const responseText = await processAudioWithZhipu({
@@ -214,6 +220,7 @@ app.post("/api/process-file", async (c) => {
       audioFormat,
       instructions,
       client,
+      deepgramClient,
       responseSaver
     });
 
@@ -282,7 +289,7 @@ app.get(
 
       const agent = new ZhipuVoiceAgent({
         apiKey: process.env.ZHIPU_API_KEY,
-        instructions: "You must respond ONLY in English. Return TEXT ONLY (no audio).",
+        instructions: "You must respond ONLY in English. Return TEXT ONLY (no audio). Keep your response concise and under 70 words. Be direct and to the point.",
         audioConfig: {
           sampleRate: 44100,
           channels: 1,

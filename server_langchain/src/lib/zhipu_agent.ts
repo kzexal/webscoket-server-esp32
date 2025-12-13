@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { ZhipuAiClient, ZhipuResponse } from "./zhipu_client";
 import { AudioManager } from "./audio";
 import { ResponseSaver } from "./response_saver";
+import { DeepgramService } from "./deepgram_service";
 import { 
     processAudioWithZhipu, 
     processTTSResponse, 
@@ -25,6 +26,7 @@ export interface ZhipuVoiceAgentOptions {
 
 export class ZhipuVoiceAgent {
     private client: ZhipuAiClient;
+    private deepgramClient: DeepgramService;
     private audioManager: AudioManager;
     private responseSaver: ResponseSaver;
     private instructions?: string;
@@ -37,7 +39,12 @@ export class ZhipuVoiceAgent {
             throw new Error("ZHIPU_API_KEY is not set");
         }
 
+        const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+        if (!deepgramApiKey) {
+            throw new Error("DEEPGRAM_API_KEY is not set");
+        }
         this.client = new ZhipuAiClient(apiKey);
+        this.deepgramClient = new DeepgramService(deepgramApiKey);
         this.audioManager = new AudioManager();
         this.responseSaver = new ResponseSaver();
         this.instructions = params.instructions;
@@ -191,6 +198,7 @@ export class ZhipuVoiceAgent {
                 detectedFormat,
                 instructions: this.instructions,
                 client: this.client,
+                deepgramClient: this.deepgramClient,
                 responseSaver: this.responseSaver
             });
             

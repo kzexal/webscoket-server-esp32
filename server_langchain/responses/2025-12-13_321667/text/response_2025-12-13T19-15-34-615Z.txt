@@ -1,0 +1,1 @@
+OpenAI's GPT-3.5 is based on GPT-3, while Gemini uses a different architecture. OpenAI's model is more advanced for language understanding. Gemini approval status is not disclosed publicly.

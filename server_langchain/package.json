@@ -4,6 +4,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@deepgram/sdk": "^4.11.2",
     "@hono/node-server": "^1.13.1",
     "@hono/node-ws": "^1.0.4",
     "@langchain/community": "^0.3.4",
