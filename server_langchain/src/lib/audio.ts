@@ -56,7 +56,10 @@ export class AudioManager {
     private detectedFormat: AudioFormat | null = null;
     private recordingFilePath: string | null = null;
 
-    constructor() {
+    constructor(config?: Partial<AudioConfig>) {
+        if (config) {
+            this.config = { ...this.configHighDef, ...config };
+        }
     }
 
     private initializeFileWriter(filename: string) {
@@ -72,13 +75,13 @@ export class AudioManager {
             clearTimeout(this.writeTimeout);
             this.writeTimeout = null;
         }
-        
+
         //Đóng trình ghi tệp hiện có nếu có
         if (this.fileWriter) {
             this.fileWriter.end();
             this.fileWriter = undefined;
         }
-        
+
         //Đặt lại bộ đệm và trạng thái xử lý
         this.audioBuffer = Buffer.alloc(0);
         this.isProcessing = false;
@@ -88,7 +91,7 @@ export class AudioManager {
 
     public startRecording() {
         this.resetRecording();
-        
+
         //Tạo tên tệp với ID ngẫu nhiên
         const randomId = Math.random().toString(36).substring(2, 15);
         const tmpDir = path.join(__dirname, '../../tmp');
@@ -97,30 +100,30 @@ export class AudioManager {
         }
         const filename = path.join(tmpDir, `recording-${randomId}`);
         this.recordingFilePath = filename;
-        
+
         console.log(`Started new recording session: ${filename}`);
     }
 
     private detectFormat(buffer: Buffer): AudioFormat {
         if (buffer.length < 3) {
-            return AudioFormat.PCM; 
+            return AudioFormat.PCM;
         }
 
         //Kiểm tra định dạng MP3
         if (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0) {
             return AudioFormat.MP3;
         }
-        
+
         if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
             return AudioFormat.MP3;
         }
-        
+
         //Kiểmểm tra định dạng WAV
         if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
             return AudioFormat.WAV;
         }
-        
-       
+
+
         if (buffer[0] === 0xFF && (buffer[1] & 0xF0) === 0xF0) {
             return AudioFormat.MP3;
         }
@@ -128,9 +131,9 @@ export class AudioManager {
     }
 
     private audioBuffer: Buffer = Buffer.alloc(0);
-    private readonly WRITE_DELAY = 500; 
-    private readonly MAX_BUFFER_SIZE = 1024 * 1024; 
-    private readonly MIN_BUFFER_SIZE = this.config.sampleRate; 
+    private readonly WRITE_DELAY = 500;
+    private readonly MAX_BUFFER_SIZE = 1024 * 1024;
+    private readonly MIN_BUFFER_SIZE = this.config.sampleRate;
 
     public handleAudioBuffer(buffer: Buffer): void {
         try {
@@ -232,9 +235,9 @@ export class AudioManager {
         }
     }
 
-    
-     //Lấy định dạng âm thanh đã phát hiện
-     
+
+    //Lấy định dạng âm thanh đã phát hiện
+
     public getDetectedFormat(): AudioFormat | null {
         return this.detectedFormat;
     }
@@ -256,7 +259,7 @@ export class AudioManager {
             }
 
             const maxAmplitude = Math.max(...Array.from(samples).map(Math.abs));
-            
+
             if (maxAmplitude > 100) {
                 const processedBuffer = this.processAudioSamples(samples, maxAmplitude);
                 this.fileWriter?.write(processedBuffer);
@@ -273,12 +276,12 @@ export class AudioManager {
     }
     private processAudioSamples(samples: Int16Array, maxAmplitude: number): Buffer {
         const processedSamples = new Int16Array(samples.length);
-        const GAIN = 0.1; 
+        const GAIN = 0.1;
         const normalizeRatio = maxAmplitude > 0 ? (32767 / maxAmplitude) * GAIN : 1;
-        const noiseFloor = 15; 
+        const noiseFloor = 15;
         const maxVal = 32767 * 0.6;
-        
-        let prevSample = 0; 
+
+        let prevSample = 0;
         const smoothingFactor = 0.1;
 
         for (let i = 0; i < samples.length; i++) {
@@ -288,7 +291,7 @@ export class AudioManager {
             }
 
             let normalizedSample = samples[i] * normalizeRatio;
-            
+
             normalizedSample = prevSample + smoothingFactor * (normalizedSample - prevSample);
             prevSample = normalizedSample;
 
@@ -307,12 +310,12 @@ export class AudioManager {
             this.writeTimeout = null;
         }
 
-       
+
 
         if (this.audioBuffer.length > 0) {
             this.processAndWriteBuffer();
         }
-  
+
         if (this.fileWriter) {
             this.fileWriter.end();
             console.log('WAV file writer closed');

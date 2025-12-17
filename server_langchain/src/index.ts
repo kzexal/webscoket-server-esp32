@@ -11,11 +11,11 @@ import { ZhipuVoiceAgent } from "./lib/zhipu_agent";
 import { ZhipuAiClient } from "./lib/zhipu_client";
 import { ResponseSaver } from "./lib/response_saver";
 import { DeepgramService } from "./lib/deepgram_service";
-import { 
-    processAudioWithZhipu, 
-    processTTSResponse, 
-    formatAudioProcessingError,
-    detectAudioFormatFromBuffer
+import {
+  processAudioWithZhipu,
+  processTTSResponse,
+  formatAudioProcessingError,
+  detectAudioFormatFromBuffer
 } from "./lib/audio_processor";
 
 const app = new Hono();
@@ -44,7 +44,7 @@ app.get("/api/sessions", (c) => {
         const sessionPath = path.join(responsesDir, session);
         const audioDir = path.join(sessionPath, 'audio');
         const textDir = path.join(sessionPath, 'text');
-        
+
         const audioFiles = fs.existsSync(audioDir) ? fs.readdirSync(audioDir) : [];
         const textFiles = fs.existsSync(textDir) ? fs.readdirSync(textDir) : [];
 
@@ -66,17 +66,17 @@ app.get("/api/sessions", (c) => {
 
 app.get("/api/sessions/:sessionId", (c) => {
   const sessionId = c.req.param('sessionId');
-  
+
   try {
     const sessionPath = path.join(process.cwd(), "responses", sessionId);
-    
+
     if (!fs.existsSync(sessionPath)) {
       return c.json({ error: 'Session not found' }, 404);
     }
 
     const audioDir = path.join(sessionPath, 'audio');
     const textDir = path.join(sessionPath, 'text');
-    
+
     const audioFiles = fs.existsSync(audioDir) ? fs.readdirSync(audioDir).sort() : [];
     const textFiles = fs.existsSync(textDir) ? fs.readdirSync(textDir).sort() : [];
     const metadataFiles = fs.readdirSync(sessionPath)
@@ -84,7 +84,7 @@ app.get("/api/sessions/:sessionId", (c) => {
       .sort();
 
     const responses = [];
-    
+
     for (let i = 0; i < Math.max(audioFiles.length, textFiles.length); i++) {
       responses.push({
         index: i + 1,
@@ -111,10 +111,10 @@ app.get("/api/sessions/:sessionId", (c) => {
 
 app.get("/api/responses/text/:sessionId/:filename", (c) => {
   const { sessionId, filename } = c.req.param();
-  
+
   try {
     const filePath = path.join(process.cwd(), "responses", sessionId, "text", filename);
-    
+
     if (!filePath.startsWith(path.join(process.cwd(), "responses"))) {
       return c.json({ error: 'Invalid path' }, 403);
     }
@@ -133,10 +133,10 @@ app.get("/api/responses/text/:sessionId/:filename", (c) => {
 
 app.get("/api/responses/audio/:sessionId/:filename", (c) => {
   const { sessionId, filename } = c.req.param();
-  
+
   try {
     const filePath = path.join(process.cwd(), "responses", sessionId, "audio", filename);
-    
+
     if (!filePath.startsWith(path.join(process.cwd(), "responses"))) {
       return c.json({ error: 'Invalid path' }, 403);
     }
@@ -146,9 +146,9 @@ app.get("/api/responses/audio/:sessionId/:filename", (c) => {
     }
 
     const audioData = fs.readFileSync(filePath);
-    
+
     const ext = path.extname(filename).toLowerCase();
-    let contentType = 'audio/mpeg'; 
+    let contentType = 'audio/mpeg';
     if (ext === '.wav') contentType = 'audio/wav';
     else if (ext === '.aac') contentType = 'audio/aac';
 
@@ -161,10 +161,10 @@ app.get("/api/responses/audio/:sessionId/:filename", (c) => {
 
 app.get("/api/responses/metadata/:sessionId/:filename", (c) => {
   const { sessionId, filename } = c.req.param();
-  
+
   try {
     const filePath = path.join(process.cwd(), "responses", sessionId, filename);
-    
+
     if (!filePath.startsWith(path.join(process.cwd(), "responses"))) {
       return c.json({ error: 'Invalid path' }, 403);
     }
@@ -208,13 +208,13 @@ app.post("/api/process-file", async (c) => {
 
     // Initialize clients and response saver
     const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
-   const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
-        if (!deepgramApiKey) {
-            throw new Error("DEEPGRAM_API_KEY is not set");
-        };
+    const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+    if (!deepgramApiKey) {
+      throw new Error("DEEPGRAM_API_KEY is not set");
+    };
     const deepgramClient = new DeepgramService(deepgramApiKey);
     const responseSaver = new ResponseSaver();
-    
+
     const responseText = await processAudioWithZhipu({
       audioBuffer,
       audioFormat,
@@ -228,18 +228,18 @@ app.post("/api/process-file", async (c) => {
 
 
     let audioPath: string | undefined;
-    
+
     try {
       const ttsResult = await processTTSResponse({
         responseText,
         responseSaver
       });
-      
+
       audioPath = ttsResult.audioFilePath;
-      
+
     } catch (ttsError: any) {
       console.error('Error converting text to speech:', ttsError.message);
-      
+
       // Nếu pyttsx3 thất bại, chỉ trả về text
       console.log("TTS failed, returning text only");
       console.log('\n' + 'AI Response Text:');
@@ -265,42 +265,53 @@ app.post("/api/process-file", async (c) => {
 app.get(
   "/device",
   upgradeWebSocket((c) => ({
-    onOpen: async (c, ws) => {
-      if (!process.env.ZHIPU_API_KEY) {
-        console.error("ZHIPU_API_KEY is not set");
-        return ws.close();
-      }
+    onOpen: async (evt, ws) => {
+      try {
+        console.log("New client connecting to /device...");
+        if (!process.env.ZHIPU_API_KEY) {
+          console.error("ZHIPU_API_KEY is not set");
+          return ws.close();
+        }
 
-      const rawWs = ws.raw as WebSocket;
-      connectedClients.add(rawWs);
+        const rawWs = ws.raw as WebSocket;
+        connectedClients.add(rawWs);
+        console.log(`Client connected. Total clients: ${connectedClients.size}`);
 
-      const broadcastToClients = (data: string) => {
-        connectedClients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN) {
-            try {
-              const parsed = JSON.parse(data);
-              client.send(data);
-            } catch (e) {
-              client.send(data);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/04558b8f-606a-46fc-b607-0ccd441ef8fa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'debug-session', runId: 'initial', hypothesisId: 'H1', location: 'src/index.ts:274', message: 'WebSocket /device onOpen', data: { clientsCount: connectedClients.size }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
+
+        const broadcastToClients = (data: string) => {
+          connectedClients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+              try {
+                const parsed = JSON.parse(data);
+                client.send(data);
+              } catch (e) {
+                client.send(data);
+              }
             }
+          });
+        };
+
+        const agent = new ZhipuVoiceAgent({
+          apiKey: process.env.ZHIPU_API_KEY,
+          instructions: "You must respond ONLY in English. Return TEXT ONLY (no audio). Keep your response concise and under 70 words. Be direct and to the point.",
+          audioConfig: {
+            sampleRate: 16000,
+            channels: 1,
+            bitDepth: 16
           }
         });
-      };
 
-      const agent = new ZhipuVoiceAgent({
-        apiKey: process.env.ZHIPU_API_KEY,
-        instructions: "You must respond ONLY in English. Return TEXT ONLY (no audio). Keep your response concise and under 70 words. Be direct and to the point.",
-        audioConfig: {
-          sampleRate: 44100,
-          channels: 1,
-          bitDepth: 16
-        }
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await agent.connect(rawWs, broadcastToClients);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await agent.connect(rawWs, broadcastToClients);
+      } catch (err) {
+        console.error("Error in onOpen:", err);
+        ws.close();
+      }
     },
-    onClose: (c, ws) => {
+    onClose: (evt, ws) => {
       const rawWs = ws.raw as WebSocket;
       connectedClients.delete(rawWs);
       console.log("Client disconnected");
@@ -311,6 +322,7 @@ app.get(
 const server = serve({
   fetch: app.fetch,
   port: WS_PORT,
+  hostname: '0.0.0.0'
 });
 
 injectWebSocket(server);

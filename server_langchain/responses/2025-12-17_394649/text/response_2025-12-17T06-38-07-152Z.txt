@@ -1,0 +1,1 @@
+Yes, that's okay. Ensure the button triggers the correct AI response.
