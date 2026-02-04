@@ -1,4 +1,4 @@
-import { ZhipuAiClient } from "./zhipu_client";
+import { GeminiClient } from "./gemini_client";
 import { ResponseSaver } from "./response_saver";
 import { textToSpeech, readAudioFile } from "./tts_local";
 import { AudioFormat } from "./audio";
@@ -10,8 +10,8 @@ export interface ProcessAudioOptions {
     audioFormat?: 'wav' | 'mp3' | 'aac';
     detectedFormat?: AudioFormat | null;
     instructions?: string;
-    client: ZhipuAiClient;
-    deepgramClient: DeepgramService; // [MỚI] Thêm Deepgram Client vào đây
+    client: GeminiClient;
+    deepgramClient: DeepgramService;
     responseSaver: ResponseSaver;
 }
 
@@ -45,7 +45,7 @@ export function detectAudioFormatFromBuffer(audioBuffer: Buffer, detectedFormat?
             return 'wav';
         }
     }
-    
+
     // Fallback: detect từ buffer header
     if (audioBuffer.length >= 3) {
         if (audioBuffer[0] === 0xFF && (audioBuffer[1] & 0xE0) === 0xE0) {
@@ -56,17 +56,17 @@ export function detectAudioFormatFromBuffer(audioBuffer: Buffer, detectedFormat?
             return 'wav';
         }
     }
-    
+
     return 'wav'; // default
 }
 
 /**
- * Xử lý input (audio hoặc text): gửi đến Zhipu API và nhận text response
+ * Xử lý input (audio hoặc text): gửi đến Gemini API và nhận text response
  * Sử dụng streaming mode để giảm độ trễ
  */
-export async function processAudioWithZhipu(options: ProcessAudioOptions): Promise<string> {
+export async function processAudioWithGemini(options: ProcessAudioOptions): Promise<string> {
     const { audioBuffer, audioFormat, detectedFormat, instructions, client, deepgramClient } = options;
-    
+
     // 1. Xác định format
     const finalFormat = audioFormat || detectAudioFormatFromBuffer(audioBuffer, detectedFormat);
     const mimeType = finalFormat === 'mp3' ? 'audio/mpeg' : 'audio/wav';
@@ -100,14 +100,14 @@ export async function processAudioWithZhipu(options: ProcessAudioOptions): Promi
         return "I didn't hear anything.";
     }
 
-    console.log(`Sending transcript to Zhipu: "${userTranscript}"`);
+    console.log(`Sending transcript to Gemini: "${userTranscript}"`);
 
-    // 3. Gửi Text (Transcript) đến Zhipu GLM-4-FlashX với streaming mode
+    // 3. Gửi Text (Transcript) đến Gemini với streaming mode
     // System prompt được cập nhật để giới hạn response ~70 từ
     const defaultSystemPrompt = "You are a helpful assistant. Keep your response concise and under 70 words. Be direct and to the point.";
     let fullResponse = "";
     try {
-        console.log(`← Zhipu:`); // Bắt đầu response từ Zhipu
+        console.log(`← Gemini:`); // Bắt đầu response từ Gemini
         fullResponse = await client.chatStream({
             text: userTranscript,
             systemPrompt: instructions || defaultSystemPrompt
@@ -116,11 +116,11 @@ export async function processAudioWithZhipu(options: ProcessAudioOptions): Promi
     } catch (error) {
         // Fallback về non-streaming nếu streaming thất bại
         console.warn("Streaming failed, falling back to non-streaming mode:", error);
-        const response = await client.chat({
+        fullResponse = await client.chat({
             text: userTranscript,
             systemPrompt: instructions || defaultSystemPrompt
         });
-        fullResponse = client.getTextFromResponse(response);
+        // fullResponse = client.getTextFromResponse(response); // Not needed for GeminiClient
     }
 
     return fullResponse;
@@ -131,22 +131,22 @@ export async function processAudioWithZhipu(options: ProcessAudioOptions): Promi
  */
 export async function processTTSResponse(options: ProcessTTSOptions): Promise<ProcessTTSResult> {
     const { responseText, responseSaver } = options;
-    
+
     const audioDir = responseSaver.getAudioDir();
-    
+
     // Gọi hàm TTS local (eSpeak hoặc thư viện khác bạn đã cài)
     const audioFilePath = await textToSpeech(responseText, {
         outputDir: audioDir
     });
-    
+
     const ttsAudioBuffer = readAudioFile(audioFilePath);
-    
+
     // Log response text
     console.log('\n' + 'AI Response Text:');
     console.log("--------------------------------------------------");
     console.log(responseText);
     console.log("--------------------------------------------------");
-    
+
     // Lưu complete response với metadata
     responseSaver.saveCompleteResponse(
         responseText,
@@ -157,7 +157,7 @@ export async function processTTSResponse(options: ProcessTTSOptions): Promise<Pr
 
     const fileSize = fs.statSync(audioFilePath).size;
     console.log(`\nAudio generated: ${audioFilePath} (${(fileSize / 1024).toFixed(2)} KB)`);
-    
+
     return {
         audioFilePath,
         ttsAudioBuffer,

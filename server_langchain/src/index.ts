@@ -7,12 +7,12 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { ZhipuVoiceAgent } from "./lib/zhipu_agent";
-import { ZhipuAiClient } from "./lib/zhipu_client";
+import { GeminiVoiceAgent } from "./lib/gemini_agent";
+import { GeminiClient } from "./lib/gemini_client";
 import { ResponseSaver } from "./lib/response_saver";
 import { DeepgramService } from "./lib/deepgram_service";
 import {
-  processAudioWithZhipu,
+  processAudioWithGemini,
   processTTSResponse,
   formatAudioProcessingError,
   detectAudioFormatFromBuffer
@@ -183,8 +183,8 @@ app.get("/api/responses/metadata/:sessionId/:filename", (c) => {
 
 app.post("/api/process-file", async (c) => {
   try {
-    if (!process.env.ZHIPU_API_KEY) {
-      return c.json({ error: 'ZHIPU_API_KEY is not set' }, 500);
+    if (!process.env.GOOGLE_API_KEY) {
+      return c.json({ error: 'GOOGLE_API_KEY is not set' }, 500);
     }
 
     const body = await c.req.json();
@@ -207,7 +207,7 @@ app.post("/api/process-file", async (c) => {
     console.log(`Audio format: ${audioFormat}, size: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
 
     // Initialize clients and response saver
-    const client = new ZhipuAiClient(process.env.ZHIPU_API_KEY);
+    const client = new GeminiClient(process.env.GOOGLE_API_KEY);
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     if (!deepgramApiKey) {
       throw new Error("DEEPGRAM_API_KEY is not set");
@@ -215,7 +215,7 @@ app.post("/api/process-file", async (c) => {
     const deepgramClient = new DeepgramService(deepgramApiKey);
     const responseSaver = new ResponseSaver();
 
-    const responseText = await processAudioWithZhipu({
+    const responseText = await processAudioWithGemini({
       audioBuffer,
       audioFormat,
       instructions,
@@ -268,8 +268,8 @@ app.get(
     onOpen: async (evt, ws) => {
       try {
         console.log("New client connecting to /device...");
-        if (!process.env.ZHIPU_API_KEY) {
-          console.error("ZHIPU_API_KEY is not set");
+        if (!process.env.GOOGLE_API_KEY) {
+          console.error("GOOGLE_API_KEY is not set");
           return ws.close();
         }
 
@@ -294,8 +294,8 @@ app.get(
           });
         };
 
-        const agent = new ZhipuVoiceAgent({
-          apiKey: process.env.ZHIPU_API_KEY,
+        const agent = new GeminiVoiceAgent({
+          apiKey: process.env.GOOGLE_API_KEY,
           instructions: "You must respond ONLY in English. Return TEXT ONLY (no audio). Keep your response concise and under 70 words. Be direct and to the point.",
           audioConfig: {
             sampleRate: 16000,
@@ -327,4 +327,4 @@ const server = serve({
 
 injectWebSocket(server);
 
-console.log(`Zhipu Voice Assistant Server running on port ${WS_PORT}`);
+console.log(`Gemini Voice Assistant Server running on port ${WS_PORT}`);

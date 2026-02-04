@@ -40,9 +40,9 @@ export class ZhipuAiClient {
     private apiKey: string;
     private client: AxiosInstance;
     private baseUrl = 'https://open.bigmodel.cn/api/paas/v4';
-    
+
     // Đã chuyển sang model glm-4-flashx theo yêu cầu
-    private model = 'glm-4-flashx'; 
+    private model = 'glm-4-flashx';
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
@@ -113,10 +113,10 @@ export class ZhipuAiClient {
             });
 
             if (options.audioData) {
-                const audioBase64 = typeof options.audioData === 'string' 
-                    ? options.audioData 
+                const audioBase64 = typeof options.audioData === 'string'
+                    ? options.audioData
                     : this.getBase64FromBuffer(options.audioData);
-                
+
                 if (audioBase64.length > 25 * 1024 * 1024) {
                     throw new Error('Audio file too large (Max 25MB base64 size).');
                 }
@@ -139,13 +139,13 @@ export class ZhipuAiClient {
         try {
             // Log nhẹ để debug
             console.log(`Sending request to Zhipu (${this.model})...`);
-            
+
             const response = await this.client.post('/chat/completions', {
                 model: this.model,
                 messages,
                 stream: false,
                 // FlashX có thể chỉnh temperature thấp để phản hồi chính xác hơn
-                temperature: 0.7, 
+                temperature: 0.7,
                 top_p: 0.7,
                 max_tokens: 150 // Giới hạn ~70 từ (khoảng 100-150 tokens)
             });
@@ -198,10 +198,10 @@ export class ZhipuAiClient {
             });
 
             if (options.audioData) {
-                const audioBase64 = typeof options.audioData === 'string' 
-                    ? options.audioData 
+                const audioBase64 = typeof options.audioData === 'string'
+                    ? options.audioData
                     : this.getBase64FromBuffer(options.audioData);
-                
+
                 if (audioBase64.length > 25 * 1024 * 1024) {
                     throw new Error('Audio file too large (Max 25MB base64 size).');
                 }
@@ -224,16 +224,16 @@ export class ZhipuAiClient {
         try {
             // Log user message một cách gọn gàng
             const userMessage = messages.find(m => m.role === 'user');
-            const userText = typeof userMessage?.content === 'string' 
-                ? userMessage.content 
+            const userText = typeof userMessage?.content === 'string'
+                ? userMessage.content
                 : (userMessage?.content as any)?.find((c: any) => c.type === 'text')?.text || '';
             console.log(`→ Zhipu: "${userText.substring(0, 100)}${userText.length > 100 ? '...' : ''}"`);
-            
+
             const response = await this.client.post('/chat/completions', {
                 model: this.model,
                 messages,
                 stream: true, // Bật streaming mode
-                temperature: 0.7, 
+                temperature: 0.7,
                 top_p: 0.7,
                 max_tokens: 150 // Giới hạn ~70 từ (khoảng 100-150 tokens)
             }, {
@@ -259,11 +259,11 @@ export class ZhipuAiClient {
                             try {
                                 const jsonStr = trimmedLine.slice(6);
                                 const data = JSON.parse(jsonStr);
-                                
+
                                 // Zhipu streaming có thể dùng delta hoặc message.content
                                 const delta = data.choices?.[0]?.delta;
                                 const message = data.choices?.[0]?.message;
-                                
+
                                 if (delta?.content) {
                                     const chunkText = delta.content;
                                     fullText += chunkText;
@@ -274,8 +274,8 @@ export class ZhipuAiClient {
                                     }
                                 } else if (message?.content) {
                                     // Fallback: nếu không có delta, thử lấy từ message
-                                    const content = typeof message.content === 'string' 
-                                        ? message.content 
+                                    const content = typeof message.content === 'string'
+                                        ? message.content
                                         : message.content?.find((c: any) => c.type === 'text')?.text || '';
                                     if (content && !fullText.includes(content)) {
                                         fullText += content;
@@ -318,7 +318,7 @@ export class ZhipuAiClient {
         }
 
         const message = response.choices[0].message;
-        
+
         // Trường hợp content là string (thường gặp ở FlashX)
         if (typeof message.content === 'string') {
             return message.content;
@@ -338,7 +338,7 @@ export class ZhipuAiClient {
         if (!response.choices || response.choices.length === 0) return null;
 
         const message = response.choices[0].message;
-        
+
         if (Array.isArray(message.content)) {
             const audioContent = message.content.find(c => c.type === 'audio');
             if (audioContent && audioContent.audio) {
@@ -353,7 +353,21 @@ export class ZhipuAiClient {
 
     private handleError(error: any) {
         if (error.response) {
-            console.error(`Zhipu API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+            // Avoid stringifying circular objects (like streams in response.data)
+            let errorData = error.response.data;
+            if (typeof errorData === 'object' && errorData !== null) {
+                // If it looks like a stream or circular object, try to extract relevant info or just log the status
+                if (errorData.constructor && errorData.constructor.name === 'IncomingMessage') {
+                    errorData = '[Stream Object]';
+                }
+            }
+
+            try {
+                console.error(`Zhipu API Error: ${error.response.status} - ${JSON.stringify(errorData)}`);
+            } catch (e) {
+                console.error(`Zhipu API Error: ${error.response.status} - [Could not stringify response data]`);
+            }
+
             if (error.response.status === 400) {
                 console.error('Check your message format. Sending audio to a text model causes this.');
             }
