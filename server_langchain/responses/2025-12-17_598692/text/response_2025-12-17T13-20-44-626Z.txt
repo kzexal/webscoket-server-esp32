@@ -1,1 +1,0 @@
-If you're new to programming, start with Python. It's more beginner-friendly with a simpler syntax and vast libraries, making it easier to learn and understand basic programming concepts.

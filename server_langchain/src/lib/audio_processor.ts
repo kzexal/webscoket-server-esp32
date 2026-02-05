@@ -111,7 +111,6 @@ export async function processAudioWithGemini(options: ProcessAudioOptions): Prom
         fullResponse = await client.chatStream({
             text: userTranscript,
             systemPrompt: instructions || defaultSystemPrompt
-            // onChunk được xử lý trong zhipu_client.ts
         });
     } catch (error) {
         // Fallback về non-streaming nếu streaming thất bại

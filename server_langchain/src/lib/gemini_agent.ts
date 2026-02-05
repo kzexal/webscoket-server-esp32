@@ -74,9 +74,9 @@ export class GeminiVoiceAgent {
 
         // Xử lý audio từ ESP32
         ws.on('message', async (data: Buffer | ArrayBuffer | string) => {
-            // #region agent log
+          
             fetch('http://127.0.0.1:7243/ingest/04558b8f-606a-46fc-b607-0ccd441ef8fa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'debug-session', runId: 'initial', hypothesisId: 'H2', location: 'src/lib/gemini_agent.ts:74', message: 'ws message received on /device', data: { isBuffer: Buffer.isBuffer(data), isArrayBuffer: data instanceof ArrayBuffer, isString: typeof data === 'string', size: Buffer.isBuffer(data) ? data.length : (data instanceof ArrayBuffer ? data.byteLength : undefined) }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
+        
             try {
                 let parsedMessage: any = null;
                 let dataString: string | null = null;

@@ -33,9 +33,6 @@ export class GeminiClient {
                 maxOutputTokens: 300,
             } as any,
         });
-
-        // Note: For thinking models, we might need to handle safety settings differently or they might be stricter.
-        // Keeping existing settings for now.
     }
 
     /**
@@ -53,10 +50,6 @@ export class GeminiClient {
             console.log(`Sending request to Gemini (${this.modelName})...`);
 
             const parts: any[] = [{ text: options.text }];
-
-            // Note: Gemini API treats system instructions differently (usually passed at model creation),
-            // but for simple chat, we can prepend it or use the systemInstruction param if generating a new model instance.
-            // For now, let's prepend it if provided, or use a fresh model instance with system instruction.
 
             let modelToUse = this.model;
             if (options.systemPrompt) {

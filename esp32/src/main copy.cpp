@@ -16,7 +16,7 @@ WebSocketsClient wsClient;
 // ===== Audio Streaming Buffer (Circular Buffer) =====
 // Thao tác streaming: Vừa nhận vừa phát để không cần buffer cực lớn
 #define AUDIO_BUFFER_SIZE  (48 * 1024) 
-#define MIN_PREBUFFER_BYTES (26 * 1024) // Wait for ~26KB (more than 50%) before playing
+#define MIN_PREBUFFER_BYTES (26 * 1024) 
 
 static uint8_t audioBuffer[AUDIO_BUFFER_SIZE];
 static volatile size_t writeHead = 0;

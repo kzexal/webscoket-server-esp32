@@ -1,1 +1,0 @@
-Start with basic Python tutorials online, practice coding, and gradually increase complexity. Use resources like Codecademy, Coursera, or Python.org.

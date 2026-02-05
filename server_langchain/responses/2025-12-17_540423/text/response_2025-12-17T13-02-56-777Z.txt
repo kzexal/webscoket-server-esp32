@@ -1,1 +1,0 @@
-Start with understanding basic syntax, variables, data types, and control structures. Use a simple text editor and compile with a C++ compiler like g++. Practice with small programs and gradually increase complexity.

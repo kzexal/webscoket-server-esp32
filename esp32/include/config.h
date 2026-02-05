@@ -1,7 +1,6 @@
 #pragma once
 #include <Arduino.h>
 
-// ====== Chân bạn đang dùng ======
 static const int PIN_BUTTON = 13; // nút nhấn xuống GND (INPUT_PULLUP)
 
 // I2S MIC (INMP441) - I2S input (I2S_NUM_1)
@@ -21,13 +20,19 @@ static const size_t DMA_BUF_LEN = 256;
 static const int DMA_BUF_CNT = 8;
 
 static const float OUTPUT_GAIN = 1.2f;
-
+/*
 // ====== WiFi & WebSocket config (fill with your values) ======
 // WiFi network that ESP32 will connect to
 static const char* WIFI_SSID     = "17_501.502.503";
 static const char* WIFI_PASSWORD = "nopassdau101";
 
-// Machine running `server_langchain` (use your PC's LAN IP)
 static const char* WS_HOST = "192.168.52.143";
+static const uint16_t WS_PORT = 8888;
+static const char* WS_PATH = "/device";
+*/
+static const char* WIFI_SSID     = "Khanh";
+static const char* WIFI_PASSWORD = "08092004";
+
+static const char* WS_HOST = "10.197.52.16";
 static const uint16_t WS_PORT = 8888;
 static const char* WS_PATH = "/device";
